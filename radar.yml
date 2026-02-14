@@ -1,0 +1,31 @@
+name: Radar Minero
+
+on:
+
+  schedule:
+
+    - cron: '*/30 * * * *'
+
+jobs:
+
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+    - uses: actions/checkout@v3
+
+    - name: instalar
+
+      run: pip install requests beautifulsoup4
+
+    - name: ejecutar
+
+      run: python radar.py
+
+      env:
+
+        TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+
+        CHAT_ID: ${{ secrets.CHAT_ID }}
