@@ -1,35 +1,81 @@
 import requests
 from bs4 import BeautifulSoup
 import os
+import json
 
 TOKEN = os.environ['TELEGRAM_TOKEN']
 CHAT_ID = os.environ['CHAT_ID']
 
-url = "https://cl.indeed.com/jobs?q=mineria&l=Chile"
+KEYWORDS = [
 
-page = requests.get(url)
+"supervisor",
+"mantencion",
+"contrato",
+"planificador",
+"mantenimiento",
+"operaciones"
 
-soup = BeautifulSoup(page.content,"html.parser")
+]
 
-jobs = soup.select(".tapItem")
+URLS = [
 
-mensaje = "🚨 Radar Minero:\n\n"
+"https://cl.indeed.com/jobs?q=mineria&l=Chile",
+"https://cl.indeed.com/jobs?q=supervisor+mineria&l=Chile",
+"https://cl.indeed.com/jobs?q=maintenance+mining&l=Chile"
 
-for job in jobs[:5]:
+]
 
-    titulo = job.select_one("h2").text.strip()
+ARCHIVO = "vistos.json"
 
-    link = "https://cl.indeed.com" + job.select_one("a")["href"]
+try:
+    with open(ARCHIVO,"r") as f:
+        vistos = json.load(f)
+except:
+    vistos = []
 
-    mensaje += titulo + "\n" + link + "\n\n"
+nuevos = []
 
+for URL in URLS:
 
-requests.post(
+    page = requests.get(URL)
 
-f"https://api.telegram.org/bot{TOKEN}/sendMessage",
+    soup = BeautifulSoup(page.content,"html.parser")
 
-data={"chat_id":CHAT_ID,"text":mensaje}
+    jobs = soup.select(".tapItem")
 
-)
+    for job in jobs:
 
-print("Radar ejecutado")
+        titulo = job.select_one("h2").text.lower()
+
+        link = "https://cl.indeed.com" + job.select_one("a")["href"]
+
+        if link in vistos:
+            continue
+
+        if any(k in titulo for k in KEYWORDS):
+
+            nuevos.append((titulo,link))
+
+            vistos.append(link)
+
+with open(ARCHIVO,"w") as f:
+
+    json.dump(vistos,f)
+
+if nuevos:
+
+    mensaje = "🚨 RADAR MINERO PRO\n\n"
+
+    for t,l in nuevos:
+
+        mensaje += t.upper()+"\n"+l+"\n\n"
+
+    requests.post(
+
+    f"https://api.telegram.org/bot{TOKEN}/sendMessage",
+
+    data={"chat_id":CHAT_ID,"text":mensaje}
+
+    )
+
+print("OK")
