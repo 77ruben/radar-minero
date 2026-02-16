@@ -1,27 +1,23 @@
 import requests
 from bs4 import BeautifulSoup
 
-# =========================
-# CONFIGURACION
-# =========================
-
 TOKEN = "TU_TOKEN"
 CHAT_ID = "TU_CHAT_ID"
 
 KEYWORDS = [
-    "mining",
-    "minera",
-    "miner",
     "supervisor",
-    "planner",
-    "planificador",
     "mantencion",
     "maintenance",
-    "contratos",
-    "contract"
+    "planner",
+    "planificador",
+    "contrato",
+    "contract",
+    "minera",
+    "mining"
 ]
 
 URL = "https://cl.indeed.com/jobs?q=mining&l=Chile"
+
 
 # =========================
 # TELEGRAM
@@ -36,11 +32,17 @@ def enviar_telegram(texto):
         "text": texto
     }
 
-    requests.post(url, data=data)
+    try:
+        r = requests.post(url, data=data)
+
+        print("TELEGRAM STATUS:", r.status_code)
+        print("TELEGRAM RESPUESTA:", r.text)
+
+    except Exception as e:
+
+        print("ERROR TELEGRAM:", e)
 
 
-# =========================
-# FILTRO
 # =========================
 
 def cumple(texto):
@@ -51,51 +53,61 @@ def cumple(texto):
 
 
 # =========================
-# BUSQUEDA
-# =========================
 
 def buscar():
 
-    response = requests.get(URL)
+    try:
 
-    soup = BeautifulSoup(response.text, "html.parser")
+        headers = {
+            "User-Agent": "Mozilla/5.0"
+        }
 
-    trabajos = soup.select("h2.jobTitle")
+        response = requests.get(URL, headers=headers)
 
-    encontrados = []
+        soup = BeautifulSoup(response.text, "html.parser")
 
-    for trabajo in trabajos:
+        trabajos = soup.select("h2.jobTitle")
 
-        titulo = trabajo.get_text()
+        encontrados = []
 
-        if cumple(titulo):
+        for trabajo in trabajos:
 
-            encontrados.append(titulo)
+            titulo = trabajo.get_text()
+
+            if cumple(titulo):
+
+                encontrados.append(titulo)
 
 
-    # =========================
-    # RESULTADO
-    # =========================
+        if len(encontrados) == 0:
 
-    if len(encontrados) == 0:
+            enviar_telegram(
+                "📡 Radar Minero\n\n❌ No hay empleos según tus requerimientos hoy"
+            )
+
+        else:
+
+            mensaje = "📡 Radar Minero\n\n✅ Empleos encontrados:\n\n"
+
+            for e in encontrados:
+
+                mensaje += f"• {e}\n"
+
+            enviar_telegram(mensaje)
+
+
+    except Exception as e:
 
         enviar_telegram(
-            "📡 Radar Minero\n\n❌ No hay empleos según tus requerimientos hoy"
+            f"⚠️ Radar Minero ERROR:\n\n{e}"
         )
-
-    else:
-
-        mensaje = "📡 Radar Minero\n\n✅ Empleos encontrados:\n\n"
-
-        for e in encontrados:
-
-            mensaje += f"• {e}\n"
-
-        enviar_telegram(mensaje)
 
 
 # =========================
 
 if __name__ == "__main__":
 
+    enviar_telegram("🤖 Radar Minero iniciado")
+
     buscar()
+
