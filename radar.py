@@ -2,24 +2,27 @@ import requests
 import os
 from bs4 import BeautifulSoup
 
+# usar EXACTAMENTE los mismos nombres que ya funcionan en GitHub Secrets
 TOKEN = os.environ["TOKEN"]
 CHAT_ID = os.environ["CHAT_ID"]
 
-def enviar(msg):
+def enviar_telegram(mensaje):
 
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
 
     data = {
         "chat_id": CHAT_ID,
-        "text": msg
+        "text": mensaje
     }
 
-    requests.post(url, data=data)
+    r = requests.post(url, data=data)
+
+    print("Respuesta Telegram:", r.text)
 
 
-def buscar():
+def buscar_indeed():
 
-    url = "https://cl.indeed.com/jobs?q=mining&l=Chile"
+    url = "https://cl.indeed.com/jobs?q=mineria&l=Chile"
 
     r = requests.get(url)
 
@@ -27,20 +30,23 @@ def buscar():
 
     trabajos = soup.select("h2.jobTitle")
 
-    lista = []
+    resultados = []
 
-    for t in trabajos[:10]:
+    for trabajo in trabajos[:5]:
 
-        lista.append(t.get_text())
+        titulo = trabajo.get_text(strip=True)
 
-    return lista
+        resultados.append(titulo)
+
+    return resultados
 
 
-empleos = buscar()
+# lógica principal
+empleos = buscar_indeed()
 
 if empleos:
 
-    mensaje = "Radar Minero\n\n"
+    mensaje = "⛏ RADAR MINERO ACTIVO\n\n"
 
     for e in empleos:
 
@@ -48,7 +54,8 @@ if empleos:
 
 else:
 
-    mensaje = "Radar Minero activo\nSin resultados"
+    mensaje = "⛏ RADAR MINERO ACTIVO\nSin resultados nuevos"
 
 
-enviar(mensaje)
+# ESTA es la misma función que ya te funcionó
+enviar_telegram(mensaje)
