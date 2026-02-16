@@ -2,26 +2,28 @@ name: Radar Minero
 
 on:
   workflow_dispatch:
-
   schedule:
     - cron: '*/30 * * * *'
 
 jobs:
-
   build:
-
     runs-on: ubuntu-latest
 
     steps:
 
-    - uses: actions/checkout@v3
+    - name: Checkout
+      uses: actions/checkout@v3
+
+    - name: Instalar Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
 
     - name: Instalar dependencias
       run: pip install requests beautifulsoup4
 
     - name: Ejecutar radar
-      run: python radar.py
-
       env:
-        TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+        TOKEN: ${{ secrets.TOKEN }}
         CHAT_ID: ${{ secrets.CHAT_ID }}
+      run: python radar.py
