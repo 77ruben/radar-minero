@@ -1,17 +1,25 @@
 import requests
 import os
 
-TOKEN = os.environ['TELEGRAM_TOKEN']
-CHAT_ID = os.environ['CHAT_ID']
+TOKEN = os.environ.get("TELEGRAM_TOKEN")
+CHAT_ID = os.environ.get("CHAT_ID")
 
-mensaje = "ok, radar minero opertaivoy conectado correctamente"
+print("TOKEN:", TOKEN)
+print("CHAT_ID:", CHAT_ID)
 
-    requests.post(
+if TOKEN and CHAT_ID:
 
-    f"https://api.telegram.org/bot{TOKEN}/sendMessage",
+    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
 
-    data={"chat_id":CHAT_ID,"text":mensaje}
+    data = {
+        "chat_id": CHAT_ID,
+        "text": "✅ Radar Minero conectado correctamente"
+    }
 
-    )
+    r = requests.post(url, data=data)
 
-print("OK")
+    print("Respuesta:", r.text)
+
+else:
+
+    print("ERROR: Secrets no encontrados")
