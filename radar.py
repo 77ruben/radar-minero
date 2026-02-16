@@ -1,56 +1,54 @@
 import requests
-from bs4 import BeautifulSoup
 import os
+from bs4 import BeautifulSoup
 
 TOKEN = os.environ["TOKEN"]
 CHAT_ID = os.environ["CHAT_ID"]
 
 def enviar(msg):
+
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+
     data = {
         "chat_id": CHAT_ID,
         "text": msg
     }
+
     requests.post(url, data=data)
 
-def buscar_indeed():
+
+def buscar():
+
     url = "https://cl.indeed.com/jobs?q=mining&l=Chile"
+
     r = requests.get(url)
+
     soup = BeautifulSoup(r.text, "html.parser")
 
-    resultados = []
+    trabajos = soup.select("h2.jobTitle")
 
-    for job in soup.select("h2.jobTitle"):
-        titulo = job.text.strip()
-        link = "https://cl.indeed.com" + job.a["href"]
-        resultados.append(f"{titulo}\n{link}")
+    lista = []
 
-    return resultados
+    for t in trabajos[:10]:
 
-def buscar_chiletrabajos():
-    url = "https://www.chiletrabajos.cl/busqueda?search=minera"
-    r = requests.get(url)
-    soup = BeautifulSoup(r.text, "html.parser")
+        lista.append(t.get_text())
 
-    resultados = []
+    return lista
 
-    for job in soup.select(".job-item a"):
-        titulo = job.text.strip()
-        link = job["href"]
-        resultados.append(f"{titulo}\n{link}")
 
-    return resultados
+empleos = buscar()
 
-def main():
+if empleos:
 
-    resultados = []
+    mensaje = "Radar Minero\n\n"
 
-    resultados.extend(buscar_indeed())
-    resultados.extend(buscar_chiletrabajos())
+    for e in empleos:
 
-    if resultados:
-        enviar("⛏ RADAR MINERO\n\n" + "\n\n".join(resultados[:10]))
-    else:
-        enviar("Sin novedades hoy")
+        mensaje += "• " + e + "\n"
 
-main()
+else:
+
+    mensaje = "Radar Minero activo\nSin resultados"
+
+
+enviar(mensaje)
