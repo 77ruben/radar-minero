@@ -1,61 +1,101 @@
 import requests
-import os
 from bs4 import BeautifulSoup
 
-# usar EXACTAMENTE los mismos nombres que ya funcionan en GitHub Secrets
-TOKEN = os.environ["TOKEN"]
-CHAT_ID = os.environ["CHAT_ID"]
+# =========================
+# CONFIGURACION
+# =========================
 
-def enviar_telegram(mensaje):
+TOKEN = "TU_TOKEN"
+CHAT_ID = "TU_CHAT_ID"
+
+KEYWORDS = [
+    "mining",
+    "minera",
+    "miner",
+    "supervisor",
+    "planner",
+    "planificador",
+    "mantencion",
+    "maintenance",
+    "contratos",
+    "contract"
+]
+
+URL = "https://cl.indeed.com/jobs?q=mining&l=Chile"
+
+# =========================
+# TELEGRAM
+# =========================
+
+def enviar_telegram(texto):
 
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
 
     data = {
         "chat_id": CHAT_ID,
-        "text": mensaje
+        "text": texto
     }
 
-    r = requests.post(url, data=data)
-
-    print("Respuesta Telegram:", r.text)
+    requests.post(url, data=data)
 
 
-def buscar_indeed():
+# =========================
+# FILTRO
+# =========================
 
-    url = "https://cl.indeed.com/jobs?q=mineria&l=Chile"
+def cumple(texto):
 
-    r = requests.get(url)
+    texto = texto.lower()
 
-    soup = BeautifulSoup(r.text, "html.parser")
+    return any(k in texto for k in KEYWORDS)
+
+
+# =========================
+# BUSQUEDA
+# =========================
+
+def buscar():
+
+    response = requests.get(URL)
+
+    soup = BeautifulSoup(response.text, "html.parser")
 
     trabajos = soup.select("h2.jobTitle")
 
-    resultados = []
+    encontrados = []
 
-    for trabajo in trabajos[:5]:
+    for trabajo in trabajos:
 
-        titulo = trabajo.get_text(strip=True)
+        titulo = trabajo.get_text()
 
-        resultados.append(titulo)
+        if cumple(titulo):
 
-    return resultados
-
-
-# lógica principal
-empleos = buscar_indeed()
-
-if empleos:
-
-    mensaje = "⛏ RADAR MINERO ACTIVO\n\n"
-
-    for e in empleos:
-
-        mensaje += "• " + e + "\n"
-
-else:
-
-    mensaje = "⛏ RADAR MINERO ACTIVO\nSin resultados nuevos"
+            encontrados.append(titulo)
 
 
-# ESTA es la misma función que ya te funcionó
-enviar_telegram(mensaje)
+    # =========================
+    # RESULTADO
+    # =========================
+
+    if len(encontrados) == 0:
+
+        enviar_telegram(
+            "📡 Radar Minero\n\n❌ No hay empleos según tus requerimientos hoy"
+        )
+
+    else:
+
+        mensaje = "📡 Radar Minero\n\n✅ Empleos encontrados:\n\n"
+
+        for e in encontrados:
+
+            mensaje += f"• {e}\n"
+
+        enviar_telegram(mensaje)
+
+
+# =========================
+
+if __name__ == "__main__":
+
+    buscar()
