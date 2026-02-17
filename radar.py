@@ -2,24 +2,32 @@ import requests
 from bs4 import BeautifulSoup
 import os
 
-print("INICIO RADAR MINERO")
+print("INICIO RADAR MINERO PRO")
 
 TOKEN = os.environ["TOKEN"]
 CHAT_ID = os.environ["CHAT_ID"]
 
-# PALABRAS CLAVE SEGÚN TU PERFIL
+# FILTRO PROFESIONAL MINERO COMPLETO
+
 KEYWORDS = [
+
     "supervisor",
     "mantencion",
     "mantenimiento",
-    "administrador",
-    "contrato",
-    "ingeniero",
+    "planner",
     "planificador",
-    "jefe"
+    "ingeniero",
+    "confiabilidad",
+    "reliability",
+    "administrador",
+    "contract",
+    "contrato",
+    "maintenance",
+    "jefe",
+    "programador",
+    "scheduler"
 ]
 
-# URL INDEED CHILE MINERIA
 URL = "https://cl.indeed.com/jobs?q=mineria&l=Chile&sort=date"
 
 headers = {
@@ -36,33 +44,35 @@ encontrados = []
 
 for job in jobs:
 
-    titulo = job.select_one("h2").text.lower()
+    titulo = job.select_one("h2").text.strip()
+
+    titulo_lower = titulo.lower()
 
     link = job.select_one("a")["href"]
 
     link = "https://cl.indeed.com" + link
 
-    if any(palabra in titulo for palabra in KEYWORDS):
+    if any(p in titulo_lower for p in KEYWORDS):
 
         encontrados.append(
             titulo + "\n" + link
         )
 
-# MENSAJE FINAL
+# MENSAJE
 
 if encontrados:
 
-    mensaje = "🚨 EMPLEOS MINEROS ENCONTRADOS:\n\n"
+    mensaje = "🚨 EMPLEOS MINEROS DETECTADOS 🚨\n\n"
 
-    for e in encontrados[:5]:
+    for e in encontrados[:10]:
 
         mensaje += e + "\n\n"
 
 else:
 
-    mensaje = "Radar Minero activo.\nNo hay empleos nuevos que coincidan con tu perfil."
+    mensaje = "Radar Minero activo.\nSin empleos nuevos compatibles."
 
-# ENVIAR A TELEGRAM
+# TELEGRAM
 
 urlTelegram = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
 
@@ -73,4 +83,4 @@ data = {
 
 requests.post(urlTelegram, data=data)
 
-print("FIN RADAR")
+print("FIN RADAR MINERO PRO")
