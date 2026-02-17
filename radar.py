@@ -1,40 +1,205 @@
 import requests
 from bs4 import BeautifulSoup
-import telegram
 import os
 
+print("INICIO RADAR MINERO PRO")
+
+TOKEN = os.environ["TOKEN"]
+CHAT_ID = os.environ["CHAT_ID"]
+
 # =========================
-# CONFIGURACION
+# FILTRO PROFESIONAL MINERO
 # =========================
 
-TOKEN = os.getenv("TELEGRAM_TOKEN")
-CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
-
-bot = telegram.Bot(token=TOKEN)
-
-# Palabras clave
 KEYWORDS = [
+
     "supervisor",
-    "administrador",
-    "contrato",
-    "planificacion",
-    "planificador",
     "mantencion",
     "mantenimiento",
+    "planner",
+    "planificador",
     "ingeniero",
+    "confiabilidad",
+    "reliability",
+    "administrador",
+    "contrato",
+    "contract",
+    "maintenance",
+    "jefe",
+    "programador",
+    "scheduler"
+
 ]
 
-# Sitios a revisar
-URLS = {
+headers = {
+    "User-Agent": "Mozilla/5.0"
+}
 
-    "Trabajando": "https://www.trabajando.cl/trabajo-empleo/mineria",
+encontrados = []
 
-    "Laborum": "https://www.laborum.cl/empleos-industria-mineria.html",
+# =========================
+# INDEED CHILE (3 paginas)
+# =========================
 
-    "Chiletrabajos": "https://www.chiletrabajos.cl/trabajos/?q=mineria",
+print("Buscando en Indeed")
 
-    "BNE": "https://www.bne.cl/ofertas?textoBusqueda=mineria",
+for pagina in range(0, 30, 10):
 
+    URL = f"https://cl.indeed.com/jobs?q=mineria&l=Chile&sort=date&start={pagina}"
+
+    try:
+
+        response = requests.get(URL, headers=headers)
+
+        soup = BeautifulSoup(response.text, "html.parser")
+
+        jobs = soup.select(".job_seen_beacon")
+
+        for job in jobs:
+
+            titulo = job.select_one("h2").text.strip()
+
+            titulo_lower = titulo.lower()
+
+            link = job.select_one("a")["href"]
+
+            link = "https://cl.indeed.com" + link
+
+            if any(p in titulo_lower for p in KEYWORDS):
+
+                encontrados.append(
+                    "INDEED\n" +
+                    titulo + "\n" +
+                    link
+                )
+
+    except:
+
+        print("Error Indeed")
+
+
+# =========================
+# CHILETRABAJOS
+# =========================
+
+print("Buscando en Chiletrabajos")
+
+try:
+
+    URL = "https://www.chiletrabajos.cl/trabajos/?q=mineria"
+
+    response = requests.get(URL, headers=headers)
+
+    soup = BeautifulSoup(response.text, "html.parser")
+
+    links = soup.select("a")
+
+    for link in links:
+
+        titulo = link.text.strip()
+
+        href = link.get("href")
+
+        if titulo and href:
+
+            titulo_lower = titulo.lower()
+
+            if any(p in titulo_lower for p in KEYWORDS):
+
+                encontrados.append(
+
+                    "CHILETRABAJOS\n" +
+                    titulo + "\n" +
+                    href
+                )
+
+except:
+
+    print("Error Chiletrabajos")
+
+
+# =========================
+# LABORUM
+# =========================
+
+print("Buscando en Laborum")
+
+try:
+
+    URL = "https://www.laborum.cl/empleos-industria-mineria.html"
+
+    response = requests.get(URL, headers=headers)
+
+    soup = BeautifulSoup(response.text, "html.parser")
+
+    links = soup.select("a")
+
+    for link in links:
+
+        titulo = link.text.strip()
+
+        href = link.get("href")
+
+        if titulo and href:
+
+            titulo_lower = titulo.lower()
+
+            if any(p in titulo_lower for p in KEYWORDS):
+
+                encontrados.append(
+
+                    "LABORUM\n" +
+                    titulo + "\n" +
+                    href
+                )
+
+except:
+
+    print("Error Laborum")
+
+
+# =========================
+# ELIMINAR DUPLICADOS
+# =========================
+
+encontrados = list(dict.fromkeys(encontrados))
+
+print("Total encontrados:", len(encontrados))
+
+
+# =========================
+# MENSAJE TELEGRAM
+# =========================
+
+if encontrados:
+
+    mensaje = "🚨 RADAR MINERO PRO 🚨\n\n"
+
+    for e in encontrados[:15]:
+
+        mensaje += e + "\n\n"
+
+else:
+
+    mensaje = "Radar Minero activo.\nSin empleos nuevos compatibles."
+
+
+# =========================
+# ENVIAR TELEGRAM
+# =========================
+
+urlTelegram = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+
+data = {
+
+    "chat_id": CHAT_ID,
+    "text": mensaje
+
+}
+
+requests.post(urlTelegram, data=data)
+
+print("FIN RADAR MINERO PRO")
 }
 
 # =========================
