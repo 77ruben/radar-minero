@@ -1,6 +1,6 @@
 import requests
 
-TOKEN = "TU_TOKEN"
+TOKEN = "EL_TOKEN_REAL"
 CHAT_ID = "TU_CHAT_ID"
 
 print("INICIO RADAR")
