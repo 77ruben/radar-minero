@@ -7,10 +7,6 @@ print("INICIO RADAR MINERO PRO")
 TOKEN = os.environ["TOKEN"]
 CHAT_ID = os.environ["CHAT_ID"]
 
-# =========================
-# FILTRO PROFESIONAL MINERO
-# =========================
-
 KEYWORDS = [
 
     "supervisor",
@@ -20,21 +16,140 @@ KEYWORDS = [
     "planificador",
     "ingeniero",
     "confiabilidad",
-    "reliability",
     "administrador",
     "contrato",
-    "contract",
     "maintenance",
     "jefe",
-    "programador",
     "scheduler"
 
 ]
 
-headers = {
+HEADERS = {
     "User-Agent": "Mozilla/5.0"
 }
 
+encontrados = []
+
+# =====================
+# INDEED (FUNCIONA 100%)
+# =====================
+
+print("Buscando Indeed")
+
+for pagina in range(0, 50, 10):
+
+    URL = f"https://cl.indeed.com/jobs?q=mineria&l=Chile&sort=date&start={pagina}"
+
+    response = requests.get(URL, headers=HEADERS)
+
+    soup = BeautifulSoup(response.text, "html.parser")
+
+    jobs = soup.select(".job_seen_beacon")
+
+    for job in jobs:
+
+        titulo = job.select_one("h2").text.strip()
+
+        titulo_lower = titulo.lower()
+
+        link = job.select_one("a")["href"]
+
+        link = "https://cl.indeed.com" + link
+
+        if any(p in titulo_lower for p in KEYWORDS):
+
+            encontrados.append(
+
+                "INDEED\n" +
+                titulo + "\n" +
+                link
+
+            )
+
+
+# =====================
+# TRABAJANDO.CL
+# =====================
+
+print("Buscando Trabajando")
+
+try:
+
+    URL = "https://www.trabajando.cl/trabajo-empleo/mineria"
+
+    response = requests.get(URL, headers=HEADERS)
+
+    soup = BeautifulSoup(response.text, "html.parser")
+
+    links = soup.find_all("a")
+
+    for link in links:
+
+        titulo = link.text.strip()
+
+        href = link.get("href")
+
+        if titulo and href:
+
+            titulo_lower = titulo.lower()
+
+            if any(p in titulo_lower for p in KEYWORDS):
+
+                encontrados.append(
+
+                    "TRABAJANDO\n" +
+                    titulo + "\n" +
+                    href
+
+                )
+
+except:
+
+    print("Trabajando bloqueado")
+
+
+# =====================
+# LIMPIAR DUPLICADOS
+# =====================
+
+encontrados = list(dict.fromkeys(encontrados))
+
+print("Total encontrados:", len(encontrados))
+
+
+# =====================
+# MENSAJE
+# =====================
+
+if encontrados:
+
+    mensaje = "🚨 RADAR MINERO PRO 🚨\n\n"
+
+    for e in encontrados[:15]:
+
+        mensaje += e + "\n\n"
+
+else:
+
+    mensaje = "Radar activo.\nSin empleos nuevos."
+
+
+# =====================
+# TELEGRAM
+# =====================
+
+url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+
+data = {
+
+    "chat_id": CHAT_ID,
+    "text": mensaje
+
+}
+
+requests.post(url, data=data)
+
+print("FIN RADAR")
 encontrados = []
 
 # =========================
