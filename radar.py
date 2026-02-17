@@ -2,26 +2,19 @@ import requests
 from bs4 import BeautifulSoup
 import os
 
-print("INICIO RADAR MINERO PRO")
+print("INICIO RADAR")
 
-TOKEN = os.environ["TOKEN"]
-CHAT_ID = os.environ["CHAT_ID"]
+TOKEN = os.environ.get("TOKEN")
+CHAT_ID = os.environ.get("CHAT_ID")
 
 KEYWORDS = [
-
     "supervisor",
     "mantencion",
-    "mantenimiento",
+    "ingeniero",
     "planner",
     "planificador",
-    "ingeniero",
-    "confiabilidad",
     "administrador",
-    "contrato",
-    "maintenance",
-    "jefe",
-    "scheduler"
-
+    "contrato"
 ]
 
 HEADERS = {
@@ -30,11 +23,54 @@ HEADERS = {
 
 encontrados = []
 
-# =====================
-# INDEED (FUNCIONA 100%)
-# =====================
+for pagina in range(0, 30, 10):
 
-print("Buscando Indeed")
+    URL = f"https://cl.indeed.com/jobs?q=mineria&l=Chile&sort=date&start={pagina}"
+
+    response = requests.get(URL, headers=HEADERS)
+
+    soup = BeautifulSoup(response.text, "html.parser")
+
+    jobs = soup.select(".job_seen_beacon")
+
+    for job in jobs:
+
+        titulo = job.select_one("h2").text.strip()
+
+        link = job.select_one("a")["href"]
+
+        link = "https://cl.indeed.com" + link
+
+        if any(p in titulo.lower() for p in KEYWORDS):
+
+            encontrados.append(titulo + "\n" + link)
+
+
+if encontrados:
+
+    mensaje = "RADAR MINERO\n\n"
+
+    for e in encontrados[:10]:
+
+        mensaje += e + "\n\n"
+
+else:
+
+    mensaje = "Sin resultados nuevos"
+
+
+url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+
+data = {
+
+    "chat_id": CHAT_ID,
+    "text": mensaje
+
+}
+
+requests.post(url, data=data)
+
+print("FIN RADAR")print("Buscando Indeed")
 
 for pagina in range(0, 50, 10):
 
