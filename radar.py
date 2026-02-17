@@ -1,160 +1,158 @@
 import requests
 from bs4 import BeautifulSoup
 import telegram
-import os
 
-# ==========================
-# TELEGRAM
-# ==========================
-
-TOKEN = os.getenv("TELEGRAM_TOKEN")
-CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+TOKEN = "TU_TOKEN"
+CHAT_ID = "TU_CHAT_ID"
 
 bot = telegram.Bot(token=TOKEN)
 
-# ==========================
-# PALABRAS CLAVE (OPTIMIZADAS PARA TU PERFIL)
-# ==========================
-
-KEYWORDS = [
-
+KEYWORDS_CARGO = [
     "supervisor",
-    "mantencion",
-    "mantenimiento",
-    "contrato",
-    "contratos",
-    "planificacion",
-    "planificador",
-    "ingeniero",
-    "mineria",
-    "minero",
-    "confiabilidad"
-
+    "administrador de contrato",
+    "jefe de turno",
+    "supervisor mantencion",
+    "planner",
+    "confiabilidad",
+    "mantenimiento"
 ]
 
-# ==========================
-# PAGINAS REALES MINERAS
-# ==========================
+KEYWORDS_TURNO = [
+    "14x14",
+    "10x10",
+    "7x7",
+    "4x3"
+]
 
-URLS = {
-
-    "Laborum":
-
-    "https://www.laborum.cl/empleos-busqueda-mineria.html",
-
-
-    "Chiletrabajos":
-
-    "https://www.chiletrabajos.cl/buscar/mineria",
-
-
-    "Trabajando":
-
-    "https://www.trabajando.cl/trabajo-empleo/mineria"
-
-}
+KEYWORDS_MINERIA = [
+    "minera",
+    "mineria",
+    "faena",
+    "codelco",
+    "bhp",
+    "kinross",
+    "collahuasi",
+    "candelaria",
+    "antofagasta minerals",
+    "anglo american",
+    "teck"
+]
 
 
-# ==========================
-# BUSCAR EMPLEOS
-# ==========================
-
-def cumple(texto):
+def cumple_filtro(texto):
 
     texto = texto.lower()
 
-    return any(k in texto for k in KEYWORDS)
+    cargo = any(k in texto for k in KEYWORDS_CARGO)
+
+    turno = any(k in texto for k in KEYWORDS_TURNO)
+
+    mineria = any(k in texto for k in KEYWORDS_MINERIA)
+
+    return cargo and mineria
 
 
+def buscar_indeed():
 
-def buscar():
+    url = "https://cl.indeed.com/jobs?q=mineria&l=Chile"
+
+    response = requests.get(url)
+
+    soup = BeautifulSoup(response.text, "html.parser")
+
+    trabajos = soup.select("h2.jobTitle")
 
     encontrados = []
 
-    headers = {
+    for trabajo in trabajos:
 
-        "User-Agent":
+        titulo = trabajo.get_text()
 
-        "Mozilla/5.0"
+        if cumple_filtro(titulo):
 
-    }
-
-
-    for nombre, url in URLS.items():
-
-        try:
-
-            r = requests.get(url, headers=headers)
-
-            soup = BeautifulSoup(r.text, "html.parser")
-
-            links = soup.find_all("a")
-
-            for link in links:
-
-                titulo = link.get_text().strip()
-
-                href = link.get("href")
-
-                if titulo and href:
-
-                    if cumple(titulo):
-
-                        if href.startswith("/"):
-
-                            href = url + href
-
-                        encontrados.append(
-
-                            f"{titulo}\n{href}\n"
-
-                        )
-
-        except Exception as e:
-
-            print("Error en", nombre, e)
-
+            encontrados.append("Indeed: " + titulo)
 
     return encontrados
 
 
+def buscar_chiletrabajos():
 
-# ==========================
-# ENVIAR TELEGRAM
-# ==========================
+    url = "https://www.chiletrabajos.cl/busqueda?q=mineria"
 
-def enviar():
+    response = requests.get(url)
 
-    empleos = buscar()
+    soup = BeautifulSoup(response.text, "html.parser")
 
+    trabajos = soup.select(".job-title")
 
-    if empleos:
+    encontrados = []
 
-        mensaje = "🚨 EMPLEOS MINEROS ENCONTRADOS 🚨\n\n"
+    for trabajo in trabajos:
 
-        mensaje += "\n".join(empleos[:10])
+        titulo = trabajo.get_text()
 
-    else:
+        if cumple_filtro(titulo):
 
-        mensaje = "⚠️ No encontró empleos nuevos según el filtro"
+            encontrados.append("Chiletrabajos: " + titulo)
 
-
-    bot.send_message(
-
-        chat_id=CHAT_ID,
-
-        text=mensaje
-
-    )
+    return encontrados
 
 
+def buscar_laborum():
 
-# ==========================
+    url = "https://www.laborum.cl/empleos-busqueda-mineria.html"
 
-# EJECUTAR
+    response = requests.get(url)
 
-# ==========================
+    soup = BeautifulSoup(response.text, "html.parser")
+
+    trabajos = soup.select("h2")
+
+    encontrados = []
+
+    for trabajo in trabajos:
+
+        titulo = trabajo.get_text()
+
+        if cumple_filtro(titulo):
+
+            encontrados.append("Laborum: " + titulo)
+
+    return encontrados
+
+
+def enviar_telegram(lista):
+
+    if not lista:
+
+        print("Sin resultados")
+
+        return
+
+    mensaje = "🚨 RADAR MINERO PRO\n\n"
+
+    for item in lista:
+
+        mensaje += item + "\n"
+
+    bot.send_message(chat_id=CHAT_ID, text=mensaje)
+
+
+def main():
+
+    resultados = []
+
+    resultados.extend(buscar_indeed())
+
+    resultados.extend(buscar_chiletrabajos())
+
+    resultados.extend(buscar_laborum())
+
+    print("Encontrados:", len(resultados))
+
+    enviar_telegram(resultados)
+
 
 if __name__ == "__main__":
 
-    enviar()
+    main()
