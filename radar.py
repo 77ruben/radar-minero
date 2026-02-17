@@ -8,8 +8,8 @@ import os
 # CONFIGURACION TELEGRAM
 # =========================
 
-TOKEN = "TU_TOKEN_AQUI"
-CHAT_ID = "TU_CHAT_ID_AQUI"
+TOKEN = "8230281232:AAFNFWGscdgbs97HsgeWQpnA-kCw6KwV0JQ"
+CHAT_ID = "7232135381"
 
 # =========================
 # PALABRAS CLAVE CARGOS
