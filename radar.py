@@ -1,86 +1,160 @@
 import requests
 from bs4 import BeautifulSoup
+import telegram
 import os
 
-print("INICIO RADAR MINERO PRO")
+# ==========================
+# TELEGRAM
+# ==========================
 
-TOKEN = os.environ["TOKEN"]
-CHAT_ID = os.environ["CHAT_ID"]
+TOKEN = os.getenv("TELEGRAM_TOKEN")
+CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-# FILTRO PROFESIONAL MINERO COMPLETO
+bot = telegram.Bot(token=TOKEN)
+
+# ==========================
+# PALABRAS CLAVE (OPTIMIZADAS PARA TU PERFIL)
+# ==========================
 
 KEYWORDS = [
 
     "supervisor",
     "mantencion",
     "mantenimiento",
-    "planner",
+    "contrato",
+    "contratos",
+    "planificacion",
     "planificador",
     "ingeniero",
-    "confiabilidad",
-    "reliability",
-    "administrador",
-    "contract",
-    "contrato",
-    "maintenance",
-    "jefe",
-    "programador",
-    "scheduler"
+    "mineria",
+    "minero",
+    "confiabilidad"
+
 ]
 
-URL = "https://cl.indeed.com/jobs?q=mineria&l=Chile&sort=date"
+# ==========================
+# PAGINAS REALES MINERAS
+# ==========================
 
-headers = {
-    "User-Agent": "Mozilla/5.0"
+URLS = {
+
+    "Laborum":
+
+    "https://www.laborum.cl/empleos-busqueda-mineria.html",
+
+
+    "Chiletrabajos":
+
+    "https://www.chiletrabajos.cl/buscar/mineria",
+
+
+    "Trabajando":
+
+    "https://www.trabajando.cl/trabajo-empleo/mineria"
+
 }
 
-response = requests.get(URL, headers=headers)
 
-soup = BeautifulSoup(response.text, "html.parser")
+# ==========================
+# BUSCAR EMPLEOS
+# ==========================
 
-jobs = soup.select(".job_seen_beacon")
+def cumple(texto):
 
-encontrados = []
+    texto = texto.lower()
 
-for job in jobs:
+    return any(k in texto for k in KEYWORDS)
 
-    titulo = job.select_one("h2").text.strip()
 
-    titulo_lower = titulo.lower()
 
-    link = job.select_one("a")["href"]
+def buscar():
 
-    link = "https://cl.indeed.com" + link
+    encontrados = []
 
-    if any(p in titulo_lower for p in KEYWORDS):
+    headers = {
 
-        encontrados.append(
-            titulo + "\n" + link
-        )
+        "User-Agent":
 
-# MENSAJE
+        "Mozilla/5.0"
 
-if encontrados:
+    }
 
-    mensaje = "🚨 EMPLEOS MINEROS DETECTADOS 🚨\n\n"
 
-    for e in encontrados[:10]:
+    for nombre, url in URLS.items():
 
-        mensaje += e + "\n\n"
+        try:
 
-else:
+            r = requests.get(url, headers=headers)
 
-    mensaje = "Radar Minero activo.\nSin empleos nuevos compatibles."
+            soup = BeautifulSoup(r.text, "html.parser")
 
-# TELEGRAM
+            links = soup.find_all("a")
 
-urlTelegram = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+            for link in links:
 
-data = {
-    "chat_id": CHAT_ID,
-    "text": mensaje
-}
+                titulo = link.get_text().strip()
 
-requests.post(urlTelegram, data=data)
+                href = link.get("href")
 
-print("FIN RADAR MINERO PRO")
+                if titulo and href:
+
+                    if cumple(titulo):
+
+                        if href.startswith("/"):
+
+                            href = url + href
+
+                        encontrados.append(
+
+                            f"{titulo}\n{href}\n"
+
+                        )
+
+        except Exception as e:
+
+            print("Error en", nombre, e)
+
+
+    return encontrados
+
+
+
+# ==========================
+# ENVIAR TELEGRAM
+# ==========================
+
+def enviar():
+
+    empleos = buscar()
+
+
+    if empleos:
+
+        mensaje = "🚨 EMPLEOS MINEROS ENCONTRADOS 🚨\n\n"
+
+        mensaje += "\n".join(empleos[:10])
+
+    else:
+
+        mensaje = "⚠️ No encontró empleos nuevos según el filtro"
+
+
+    bot.send_message(
+
+        chat_id=CHAT_ID,
+
+        text=mensaje
+
+    )
+
+
+
+# ==========================
+
+# EJECUTAR
+
+# ==========================
+
+if __name__ == "__main__":
+
+    enviar()
