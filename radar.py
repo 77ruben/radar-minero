@@ -1,19 +1,27 @@
 import requests
+import os
 
-TOKEN = "EL_TOKEN_REAL"
-CHAT_ID = "TU_CHAT_ID"
+TOKEN = os.getenv("TOKEN")
+CHAT_ID = os.getenv("CHAT_ID")
 
 print("INICIO RADAR")
 
+if not TOKEN:
+    print("ERROR: TOKEN vacío")
+
+if not CHAT_ID:
+    print("ERROR: CHAT_ID vacío")
+
 url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
 
-data = {
+mensaje = "Radar Minero operativo correctamente"
+
+r = requests.get(url, params={
     "chat_id": CHAT_ID,
-    "text": "🔥 MENSAJE DESDE GITHUB - PRUEBA REAL"
-}
+    "text": mensaje
+})
 
-r = requests.post(url, data=data)
-
+print("URL:", url)
 print("STATUS:", r.status_code)
 print("RESPUESTA:", r.text)
 
