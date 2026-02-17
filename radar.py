@@ -398,7 +398,7 @@ enviar(resultado)
 
 print("Finalizado")    "anglo american",
     "teck"
-]
+
 
 
 def cumple_filtro(texto):
