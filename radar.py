@@ -315,7 +315,7 @@ data = {
 requests.post(urlTelegram, data=data)
 
 print("FIN RADAR MINERO PRO")
-}
+
 
 # =========================
 # FUNCIONES
