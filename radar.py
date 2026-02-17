@@ -8,8 +8,8 @@ import os
 # CONFIGURACION TELEGRAM
 # =========================
 
-TOKEN = "8230281232:AAFNFWGscdgbs97HsgeWQpnA-kCw6KwV0JQ"
-CHAT_ID = "7232135381"
+TOKEN = os.environ["TOKEN"]
+CHAT_ID = os.environ["CHAT_ID"]
 
 # =========================
 # PALABRAS CLAVE CARGOS
