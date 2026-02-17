@@ -1,40 +1,122 @@
 import requests
 from bs4 import BeautifulSoup
 import telegram
+import os
 
-TOKEN = "TU_TOKEN"
-CHAT_ID = "TU_CHAT_ID"
+# =========================
+# CONFIGURACION
+# =========================
+
+TOKEN = os.getenv("TELEGRAM_TOKEN")
+CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
 bot = telegram.Bot(token=TOKEN)
 
-KEYWORDS_CARGO = [
+# Palabras clave
+KEYWORDS = [
     "supervisor",
-    "administrador de contrato",
-    "jefe de turno",
-    "supervisor mantencion",
-    "planner",
-    "confiabilidad",
-    "mantenimiento"
+    "administrador",
+    "contrato",
+    "planificacion",
+    "planificador",
+    "mantencion",
+    "mantenimiento",
+    "ingeniero",
 ]
 
-KEYWORDS_TURNO = [
-    "14x14",
-    "10x10",
-    "7x7",
-    "4x3"
-]
+# Sitios a revisar
+URLS = {
 
-KEYWORDS_MINERIA = [
-    "minera",
-    "mineria",
-    "faena",
-    "codelco",
-    "bhp",
-    "kinross",
-    "collahuasi",
-    "candelaria",
-    "antofagasta minerals",
-    "anglo american",
+    "Trabajando": "https://www.trabajando.cl/trabajo-empleo/mineria",
+
+    "Laborum": "https://www.laborum.cl/empleos-industria-mineria.html",
+
+    "Chiletrabajos": "https://www.chiletrabajos.cl/trabajos/?q=mineria",
+
+    "BNE": "https://www.bne.cl/ofertas?textoBusqueda=mineria",
+
+}
+
+# =========================
+# FUNCIONES
+# =========================
+
+def cumple(texto):
+
+    texto = texto.lower()
+
+    return any(k in texto for k in KEYWORDS)
+
+
+def buscar():
+
+    encontrados = []
+
+    for nombre, url in URLS.items():
+
+        try:
+
+            r = requests.get(url, timeout=15)
+
+            soup = BeautifulSoup(r.text, "html.parser")
+
+            links = soup.find_all("a")
+
+            for link in links:
+
+                titulo = link.get_text().strip()
+
+                href = link.get("href")
+
+                if titulo and href:
+
+                    if cumple(titulo):
+
+                        if href.startswith("/"):
+
+                            href = url + href
+
+                        encontrados.append(
+                            f"{nombre}\n{titulo}\n{href}"
+                        )
+
+        except Exception as e:
+
+            print("Error en", nombre, e)
+
+    return encontrados
+
+
+def enviar(lista):
+
+    if not lista:
+
+        print("Sin resultados")
+
+        return
+
+    for item in lista:
+
+        bot.send_message(
+
+            chat_id=CHAT_ID,
+
+            text="🚨 Radar Minero\n\n" + item
+
+        )
+
+
+# =========================
+# EJECUCION
+# =========================
+
+resultado = buscar()
+
+print("Encontrados:", len(resultado))
+
+enviar(resultado)
+
+print("Finalizado")    "anglo american",
     "teck"
 ]
 
