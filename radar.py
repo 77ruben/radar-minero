@@ -8,8 +8,8 @@ import time
 # TELEGRAM DESDE SECRETS
 # =====================
 
-TOKEN = os.environ["TELEGRAM_TOKEN"]
-CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
+TOKEN = os.environ["TOKEN"]
+CHAT_ID = os.environ["CHAT_ID"]
 
 def telegram(msg):
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
