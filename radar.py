@@ -2,39 +2,186 @@
 import requests
 from bs4 import BeautifulSoup
 import os
-import time
 
-# =====================
-# TELEGRAM DESDE SECRETS
-# =====================
+TOKEN = os.environ["TELEGRAM_TOKEN"]
+CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
 
-TOKEN = os.environ["TOKEN"]
-CHAT_ID = os.environ["CHAT_ID"]
+ARCHIVO="enviados.txt"
+
+if not os.path.exists(ARCHIVO):
+    open(ARCHIVO,"w").close()
+
+
+# TELEGRAM
 
 def telegram(msg):
-    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-    data = {"chat_id": CHAT_ID, "text": msg}
+
     try:
-        requests.post(url, data=data)
-    except Exception as e:
-        print("Error Telegram:", e)
 
-# =====================
-# FILTROS PROFESIONALES
-# =====================
+        url=f"https://api.telegram.org/bot{TOKEN}/sendMessage"
 
-CARGOS = [
-    "supervisor", "mantencion", "mantenimiento",
-    "planner", "planificador", "contrato",
-    "contract", "administrador", "operaciones",
-    "maintenance", "services", "service"
+        requests.post(url,data={
+            "chat_id":CHAT_ID,
+            "text":msg
+        })
+
+    except:
+
+        print("Error Telegram")
+
+
+
+# BASE DATOS
+
+def enviados():
+
+    with open(ARCHIVO,"r",encoding="utf8") as f:
+
+        return f.read().splitlines()
+
+
+
+def guardar(link):
+
+    with open(ARCHIVO,"a",encoding="utf8") as f:
+
+        f.write(link+"\n")
+
+
+
+# FILTRO
+
+KEYWORDS=[
+"supervisor",
+"mantencion",
+"planner",
+"planificador",
+"contrato"
 ]
 
-EMPRESAS = [
-    "minera", "mining", "bhp", "codelco", "angloamerican",
-    "escondida", "kinross", "antofagasta minerals",
-    "collahuasi", "finning", "komatsu", "sodexo",
-    "aramark", "newrest", "gategroup", "adecco", "manpower"
+
+def filtro(texto):
+
+    t=texto.lower()
+
+    return any(k in t for k in KEYWORDS)
+
+
+
+# INDEED CHILE
+
+def indeed():
+
+    try:
+
+        url="https://cl.indeed.com/jobs?q=minera&l=Chile"
+
+        headers={"User-Agent":"Mozilla"}
+
+        html=requests.get(url,headers=headers)
+
+        soup=BeautifulSoup(html.text,"html.parser")
+
+        trabajos=soup.select("h2 a")
+
+        nuevos=0
+
+        lista=enviados()
+
+        for t in trabajos:
+
+            titulo=t.text.strip()
+
+            link="https://cl.indeed.com"+t["href"]
+
+            if filtro(titulo):
+
+                if link not in lista:
+
+                    telegram(f"🚨 Indeed Chile\n{titulo}\n{link}")
+
+                    guardar(link)
+
+                    nuevos+=1
+
+        return nuevos
+
+    except:
+
+        print("Error Indeed")
+
+        return 0
+
+
+
+# CODELCO PORTAL REAL
+
+def codelco():
+
+    try:
+
+        url="https://empleos.codelco.com"
+
+        headers={"User-Agent":"Mozilla"}
+
+        html=requests.get(url,headers=headers)
+
+        soup=BeautifulSoup(html.text,"html.parser")
+
+        trabajos=soup.select("a")
+
+        nuevos=0
+
+        lista=enviados()
+
+        for t in trabajos:
+
+            titulo=t.text.strip()
+
+            link=t.get("href")
+
+            if link:
+
+                if filtro(titulo):
+
+                    if link not in lista:
+
+                        telegram(f"🚨 CODELCO\n{titulo}\n{link}")
+
+                        guardar(link)
+
+                        nuevos+=1
+
+        return nuevos
+
+    except:
+
+        print("Error Codelco")
+
+        return 0
+
+
+
+# MAIN
+
+def main():
+
+    total=0
+
+    total+=indeed()
+
+    total+=codelco()
+
+
+    if total==0:
+
+        telegram("Radar Minero Chile activo")
+
+
+
+if __name__=="__main__":
+
+    main()    "aramark", "newrest", "gategroup", "adecco", "manpower"
 ]
 
 ARCHIVO = "ofertas_chile.txt"
