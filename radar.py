@@ -182,7 +182,7 @@ def main():
 if __name__=="__main__":
 
     main()    "aramark", "newrest", "gategroup", "adecco", "manpower"
-]
+
 
 ARCHIVO = "ofertas_chile.txt"
 
