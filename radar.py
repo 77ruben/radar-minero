@@ -3,42 +3,34 @@ import requests
 from bs4 import BeautifulSoup
 import os
 
-TOKEN = os.environ["TELEGRAM_TOKEN"]
-CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
+TOKEN = os.environ["TOKEN"]
+CHAT_ID = os.environ["CHAT_ID"]
 
-ARCHIVO="enviados.txt"
+ARCHIVO = "enviados.txt"
 
 if not os.path.exists(ARCHIVO):
     open(ARCHIVO,"w").close()
 
 
-# TELEGRAM
+# ---------------- TELEGRAM ----------------
 
 def telegram(msg):
 
-    try:
+    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
 
-        url=f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-
-        requests.post(url,data={
-            "chat_id":CHAT_ID,
-            "text":msg
-        })
-
-    except:
-
-        print("Error Telegram")
+    requests.post(url,data={
+        "chat_id":CHAT_ID,
+        "text":msg
+    })
 
 
-
-# BASE DATOS
+# ---------------- BASE DATOS ----------------
 
 def enviados():
 
     with open(ARCHIVO,"r",encoding="utf8") as f:
 
         return f.read().splitlines()
-
 
 
 def guardar(link):
@@ -49,120 +41,138 @@ def guardar(link):
 
 
 
-# FILTRO
+# ---------------- FILTRO ----------------
 
-KEYWORDS=[
+KEYWORDS = [
+
 "supervisor",
 "mantencion",
+"mantenimiento",
 "planner",
 "planificador",
-"contrato"
+"contrato",
+"administrador",
+"minera"
+
+]
+
+
+EMPRESAS = [
+
+"codelco",
+"bhp",
+"anglo american",
+"escondida",
+"antofagasta minerals",
+"kinross",
+"sodexo",
+"aramark",
+"newrest",
+"komatsu",
+"finning"
+
 ]
 
 
 def filtro(texto):
 
-    t=texto.lower()
+    t = texto.lower()
 
-    return any(k in t for k in KEYWORDS)
+    return (
+
+        any(k in t for k in KEYWORDS)
+
+        and
+
+        any(e in t for e in EMPRESAS)
+
+    )
 
 
 
-# INDEED CHILE
+# ---------------- INDEED CHILE ----------------
 
 def indeed():
 
-    try:
+    url="https://cl.indeed.com/jobs?q=minera&l=Chile"
 
-        url="https://cl.indeed.com/jobs?q=minera&l=Chile"
+    headers={"User-Agent":"Mozilla"}
 
-        headers={"User-Agent":"Mozilla"}
+    html=requests.get(url,headers=headers)
 
-        html=requests.get(url,headers=headers)
+    soup=BeautifulSoup(html.text,"html.parser")
 
-        soup=BeautifulSoup(html.text,"html.parser")
+    trabajos=soup.select("h2 a")
 
-        trabajos=soup.select("h2 a")
+    nuevos=0
 
-        nuevos=0
+    lista=enviados()
 
-        lista=enviados()
+    for t in trabajos:
 
-        for t in trabajos:
+        titulo=t.text.strip()
 
-            titulo=t.text.strip()
+        link="https://cl.indeed.com"+t["href"]
 
-            link="https://cl.indeed.com"+t["href"]
+        texto=titulo+" "+link
 
-            if filtro(titulo):
+        if filtro(texto):
 
-                if link not in lista:
+            if link not in lista:
 
-                    telegram(f"🚨 Indeed Chile\n{titulo}\n{link}")
+                telegram(f"🚨 MINERIA CHILE\n{titulo}\n{link}")
 
-                    guardar(link)
+                guardar(link)
 
-                    nuevos+=1
+                nuevos+=1
 
-        return nuevos
-
-    except:
-
-        print("Error Indeed")
-
-        return 0
+    return nuevos
 
 
 
-# CODELCO PORTAL REAL
 
-def codelco():
+# ---------------- CHILETRABAJOS ----------------
 
-    try:
+def chiletrabajos():
 
-        url="https://empleos.codelco.com"
+    url="https://www.chiletrabajos.cl/buscar?q=minera"
 
-        headers={"User-Agent":"Mozilla"}
+    headers={"User-Agent":"Mozilla"}
 
-        html=requests.get(url,headers=headers)
+    html=requests.get(url,headers=headers)
 
-        soup=BeautifulSoup(html.text,"html.parser")
+    soup=BeautifulSoup(html.text,"html.parser")
 
-        trabajos=soup.select("a")
+    trabajos=soup.select(".job-item a")
 
-        nuevos=0
+    nuevos=0
 
-        lista=enviados()
+    lista=enviados()
 
-        for t in trabajos:
+    for t in trabajos:
 
-            titulo=t.text.strip()
+        titulo=t.text.strip()
 
-            link=t.get("href")
+        link=t["href"]
 
-            if link:
+        texto=titulo+" "+link
 
-                if filtro(titulo):
+        if filtro(texto):
 
-                    if link not in lista:
+            if link not in lista:
 
-                        telegram(f"🚨 CODELCO\n{titulo}\n{link}")
+                telegram(f"🚨 CHILETRABAJOS\n{titulo}\n{link}")
 
-                        guardar(link)
+                guardar(link)
 
-                        nuevos+=1
+                nuevos+=1
 
-        return nuevos
-
-    except:
-
-        print("Error Codelco")
-
-        return 0
+    return nuevos
 
 
 
-# MAIN
+
+# ---------------- MAIN ----------------
 
 def main():
 
@@ -170,193 +180,19 @@ def main():
 
     total+=indeed()
 
-    total+=codelco()
+    total+=chiletrabajos()
 
 
     if total==0:
 
-        telegram("Radar Minero Chile activo")
+        telegram("Radar Minero activo sin novedades")
+
+    else:
+
+        telegram(f"{total} ofertas nuevas mineria Chile")
 
 
 
 if __name__=="__main__":
 
-    main()    "aramark", "newrest", "gategroup", "adecco", "manpower"
-
-
-ARCHIVO = "ofertas_chile.txt"
-
-if not os.path.exists(ARCHIVO):
-    open(ARCHIVO, "w").close()
-
-def cargar_enviados():
-    with open(ARCHIVO, "r", encoding="utf-8") as f:
-        return f.read().splitlines()
-
-def guardar(link):
-    with open(ARCHIVO, "a", encoding="utf-8") as f:
-        f.write(link + "\n")
-
-def cumple(text):
-    txt = text.lower()
-    return any(k in txt for k in CARGOS) and any(e in txt for e in EMPRESAS)
-
-# =====================
-# Indeed Chile
-# =====================
-
-def buscar_indeed_chile():
-    url = "https://cl.indeed.com/jobs?q=mineria&l=Chile"
-    headers = {"User-Agent":"Mozilla/5.0"}
-    resp = requests.get(url, headers=headers)
-    soup = BeautifulSoup(resp.text, "html.parser")
-    trabajos = soup.select("a.tapItem")
-    enviados = cargar_enviados()
-    nuevos = 0
-
-    for t in trabajos:
-        titulo = t.get_text().strip()
-        link = "https://cl.indeed.com" + t.get("href")
-        text = f"{titulo} {link}"
-        if cumple(text) and link not in enviados:
-            mensaje = f"🚨 OFERTA CHILE (Indeed)\n{titulo}\n{link}"
-            telegram(mensaje)
-            guardar(link)
-            nuevos += 1
-    return nuevos
-
-# =====================
-# Portales Oficiales - MINERÍA CHILE
-# =====================
-
-def buscar_portal_bhp():
-    url = "https://careers.bhp.com/search-jobs?location=Chile"
-    headers = {"User-Agent":"Mozilla/5.0"}
-    resp = requests.get(url, headers=headers)
-    soup = BeautifulSoup(resp.text, "html.parser")
-    trabajos = soup.select("a.job-title-link")
-    enviados = cargar_enviados()
-    nuevos = 0
-
-    for t in trabajos:
-        titulo = t.text.strip()
-        link = "https://careers.bhp.com" + t.get("href")
-        text = f"{titulo} {link}"
-        if cumple(text) and link not in enviados:
-            msg = f"🚨 OFERTA BHP CHILE\n{titulo}\n{link}"
-            telegram(msg)
-            guardar(link)
-            nuevos += 1
-    return nuevos
-
-def buscar_portal_codelco():
-    url = "https://trabajaencodelco.cl/trabajos/page/1/"
-    headers = {"User-Agent":"Mozilla/5.0"}
-    resp = requests.get(url, headers=headers)
-    soup = BeautifulSoup(resp.text, "html.parser")
-    trabajos = soup.select("div.job-listing a")
-    enviados = cargar_enviados()
-    nuevos = 0
-
-    for t in trabajos:
-        titulo = t.text.strip()
-        link = t.get("href")
-        text = f"{titulo} {link}"
-        if "codelco" in link and cumple(text) and link not in enviados:
-            msg = f"🚨 OFERTA CODELCO\n{titulo}\n{link}"
-            telegram(msg)
-            guardar(link)
-            nuevos += 1
-    return nuevos
-
-def buscar_portal_anglo():
-    url = "https://www.angloamerican.com/careers/search-and-apply"
-    headers = {"User-Agent":"Mozilla/5.0"}
-    resp = requests.get(url, headers=headers)
-    soup = BeautifulSoup(resp.text, "html.parser")
-    trabajos = soup.select("a.SearchResultCard") or soup.select("a.job-item")
-    enviados = cargar_enviados()
-    nuevos = 0
-
-    for t in trabajos:
-        titulo = t.get_text().strip()
-        link = t.get("href")
-        if not link.startswith("http"):
-            link = "https://www.angloamerican.com" + link
-        text = f"{titulo} {link}"
-        if cumple(text) and link not in enviados:
-            msg = f"🚨 OFERTA ANGLO AMERICAN\n{titulo}\n{link}"
-            telegram(msg)
-            guardar(link)
-            nuevos += 1
-    return nuevos
-
-# =====================
-# Empresas de Servicios
-# =====================
-
-def buscar_portal_sodexo():
-    url = "https://careers.sodexo.com/search-jobs"
-    headers = {"User-Agent":"Mozilla/5.0"}
-    resp = requests.get(url, headers=headers)
-    soup = BeautifulSoup(resp.text, "html.parser")
-    trabajos = soup.select("a.job-title")
-    enviados = cargar_enviados()
-    nuevos = 0
-
-    for t in trabajos:
-        titulo = t.text.strip()
-        link = t.get("href")
-        if not link.startswith("http"):
-            link = "https://careers.sodexo.com" + link
-        text = f"{titulo} {link}"
-        if cumple(text) and link not in enviados:
-            msg = f"🚨 OFERTA SODEXO Chile/LatAm\n{titulo}\n{link}"
-            telegram(msg)
-            guardar(link)
-            nuevos += 1
-    return nuevos
-
-def buscar_portal_aramark():
-    url = "https://aramark.wd3.myworkdayjobs.com/External"
-    headers = {"User-Agent":"Mozilla/5.0"}
-    resp = requests.get(url, headers=headers)
-    soup = BeautifulSoup(resp.text, "html.parser")
-    trabajos = soup.select("a.job-title")
-    enviados = cargar_enviados()
-    nuevos = 0
-
-    for t in trabajos:
-        titulo = t.text.strip()
-        link = t.get("href")
-        if not link.startswith("http"):
-            link = "https://aramark.wd3.myworkdayjobs.com" + link
-        text = f"{titulo} {link}"
-        if cumple(text) and link not in enviados:
-            msg = f"🚨 OFERTA ARAMARK Chile/LatAm\n{titulo}\n{link}"
-            telegram(msg)
-            guardar(link)
-            nuevos += 1
-    return nuevos
-
-# =====================
-# EJECUCIÓN PRINCIPAL
-# =====================
-
-def main():
-    total = 0
-
-    total += buscar_indeed_chile()
-    total += buscar_portal_bhp()
-    total += buscar_portal_codelco()
-    total += buscar_portal_anglo()
-    total += buscar_portal_sodexo()
-    total += buscar_portal_aramark()
-
-    if total == 0:
-        telegram("Radar activo CHILE sin novedades.")
-    else:
-        telegram(f"{total} ofertas nuevas detectadas.")
-
-if __name__ == "__main__":
     main()
