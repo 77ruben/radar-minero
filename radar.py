@@ -78,13 +78,44 @@ def filtro(texto):
 
     t = texto.lower()
 
+    palabras_clave = [
+
+        "supervisor",
+        "mantencion",
+        "mantenimiento",
+        "planner",
+        "planificador",
+        "contrato",
+        "administrador"
+
+    ]
+
+
+    empresas = [
+
+        "minera",
+        "codelco",
+        "bhp",
+        "anglo",
+        "escondida",
+        "antofagasta",
+        "kinross",
+        "finning",
+        "komatsu",
+        "sodexo",
+        "aramark",
+        "newrest"
+
+    ]
+
+
     return (
 
-        any(k in t for k in KEYWORDS)
+        any(p in t for p in palabras_clave)
 
-        and
+        or
 
-        any(e in t for e in EMPRESAS)
+        any(e in t for e in empresas)
 
     )
 
