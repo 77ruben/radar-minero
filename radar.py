@@ -17,11 +17,11 @@ PERFIL = [
     "ingeniero",
     "mantencion",
     "mantenimiento",
-
+    "administrador",
     "planificacion",
     "planner",
     "planificador",
-
+    "administrador de contrato",
     "confiabilidad",
 
     "contrato",
@@ -29,9 +29,9 @@ PERFIL = [
     "logistica",
 
     "supervisor",
-
+    "supervisor de operaciones",
     "industrial",
-
+    "supervisor de terreno",
     "operaciones"
 
 ]
@@ -56,9 +56,9 @@ EMPRESAS = [
     "centinela",
 
     "candelaria",
-
+    "QB"
     "teck",
-
+    "quebrada blanca",
     "kinross",
 
     "sierra gorda",
