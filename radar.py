@@ -52,7 +52,7 @@ KEYWORDS = [
 "planificador",
 "contrato",
 "administrador",
-"minera"
+"minera", "administrador de contratos"
 
 ]
 
@@ -86,7 +86,7 @@ def filtro(texto):
         "planner",
         "planificador",
         "contrato",
-        "administrador"
+        "administrador", "administrador de contratos"
 
     ]
 
