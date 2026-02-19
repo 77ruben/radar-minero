@@ -29,10 +29,10 @@ PERFIL = [
     "logistica",
 
     "operaciones",
-
+    "administrtador de contrato"
     "ingeniero",
     "supervisor",
-
+    "ADMINISTRADOR"
     "industrial",
 
     "gestion",
@@ -145,20 +145,20 @@ SERVICIOS = [
     "strabag",
 
     "ferrovial",
-
+    "cam"
     "flesan",
 
     "ryq",
-
+    "abengoa"
     "melon",
-
+    "nexxo"
     "enaex",
 
     "orica",
 
     "sodexo",
-
-    "arark"
+    "ava montajes"
+    "aramark"
 
 ]
 
@@ -172,7 +172,6 @@ TURNOS = [
     "10x10",
     "7x7",
     "4x3",
-    "5x2"
 
 ]
 
