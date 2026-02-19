@@ -18,16 +18,14 @@ jobs:
 
     - uses: actions/checkout@v3
 
-    - name: instalar
+    - name: run radar
 
-      run: pip install requests beautifulsoup4
-
-    - name: ejecutar radar
-
-      run: python RADAR_MINERO_PRO.py
-
+      run: python radar.py
+     
       env:
 
-        TELEGRAM_TOKEN: ${{ secrets.TOKEN }}
+    - TOKEN: ${{ secrets.TOKEN }}
 
-        TELEGRAM_CHAT_ID: ${{ secrets.CHAT_ID }}        run: python radar.py
+    - CHAT_ID: ${{ secrets.CHAT_ID }}
+
+ 
