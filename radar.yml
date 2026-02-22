@@ -43,7 +43,7 @@ jobs:
           TOKEN:              ${{ secrets.TOKEN }}
           CHAT_ID:            ${{ secrets.CHAT_ID }}
           GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
-        run: python radar.py
+        run: python radar_minero.py
 
       - name: Guardar seen_jobs.json
         run: |
