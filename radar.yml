@@ -1,31 +1,91 @@
-name: Radar Minero
+name: Radar Minero V9 PRO
 
 on:
-
   schedule:
-    - cron: '0 */6 * * *'
-
+    # Radar principal: cada 6 horas
+    - cron: '0 3,9,15,21 * * *'
+    # Bot Telegram: cada 30 minutos (responde botones)
+    - cron: '*/30 * * * *'
   workflow_dispatch:
 
-
 jobs:
-
-  run:
-
+  # ──────────────────────────────────────────────
+  # JOB 1: RADAR — busca empleos cada 6 horas
+  # ──────────────────────────────────────────────
+  buscar-empleos:
     runs-on: ubuntu-latest
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'schedule' &&
+       (contains(github.event.schedule, '0 3') ||
+        contains(github.event.schedule, '0 9') ||
+        contains(github.event.schedule, '0 15') ||
+        contains(github.event.schedule, '0 21')))
+    permissions:
+      contents: write
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-    - uses: actions/checkout@v3
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
 
-    - name: ejecutar radar
+      - name: Instalar dependencias
+        run: pip install requests beautifulsoup4 gspread google-auth
 
-      run: python radar.py
-     
-      env:
+      - name: Ejecutar Radar Minero
+        env:
+          TOKEN:              ${{ secrets.TOKEN }}
+          CHAT_ID:            ${{ secrets.CHAT_ID }}
+          GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+        run: python radar_minero.py
 
-    - TOKEN: ${{ secrets.TOKEN }}
+      - name: Guardar seen_jobs.json
+        run: |
+          git config --global user.name "Radar Minero Bot"
+          git config --global user.email "bot@radar-minero.cl"
+          git add seen_jobs.json
+          git diff --cached --quiet || git commit -m "chore: actualizar seen_jobs [skip ci]"
+          git push
 
-    - CHAT_ID: ${{ secrets.CHAT_ID }}
+  # ──────────────────────────────────────────────
+  # JOB 2: BOT — responde botones de Telegram
+  # ──────────────────────────────────────────────
+  bot-telegram:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
- 
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Instalar dependencias
+        run: pip install requests gspread google-auth
+
+      - name: Ejecutar Bot Telegram
+        env:
+          TOKEN:              ${{ secrets.TOKEN }}
+          CHAT_ID:            ${{ secrets.CHAT_ID }}
+          GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+        run: python bot_telegram.py
+
+      - name: Guardar offset del bot
+        run: |
+          git config --global user.name "Radar Minero Bot"
+          git config --global user.email "bot@radar-minero.cl"
+          git add bot_offset.json
+          git diff --cached --quiet || git commit -m "chore: actualizar bot offset [skip ci]"
+          git push
