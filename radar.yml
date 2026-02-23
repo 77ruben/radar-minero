@@ -2,22 +2,22 @@ name: Radar Minero V10 IA
 
 on:
   schedule:
-    - cron: '0 */6 * * *' # Se ejecuta cada 6 horas automáticamente
-  workflow_dispatch: # Permite ejecución manual con el botón Run
+    - cron: '0 */6 * * *' # Se ejecuta solo cada 6 horas
+  workflow_dispatch: # Permite que tú le des al botón "Run" manualmente
 
 jobs:
-  run-radar:
+  build:
     runs-on: ubuntu-latest
     steps:
-      - name: Descargar código del repositorio
+      - name: Checkout del código
         uses: actions/checkout@v3
 
-      - name: Instalar Python
+      - name: Configurar Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.9'
 
-      - name: Instalar Librerías (El ingrediente faltante)
+      - name: Instalar Librerías (ESTO ES LO QUE FALTA)
         run: |
           python -m pip install --upgrade pip
           pip install requests beautifulsoup4 google-generativeai
@@ -29,10 +29,10 @@ jobs:
           GEMINI_KEY: ${{ secrets.GEMINI_KEY }}
         run: python radar.py
 
-      - name: Guardar historial (para no repetir avisos)
+      - name: Guardar historial de avisos
         run: |
           git config --global user.name "GitHub Action"
           git config --global user.email "actions@github.com"
           git add seen_jobs.json
-          git commit -m "Actualizar historial de empleos" || exit 0
+          git commit -m "Update seen jobs" || exit 0
           git push
