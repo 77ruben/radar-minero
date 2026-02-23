@@ -1,13 +1,14 @@
 """
 ╔══════════════════════════════════════════════════════╗
-║    RADAR MINERO V8 PLUS - Rubén Morales              ║
+║    RADAR MINERO V8 PLUS 2 - Rubén Morales            ║
 ║                                                      ║
 ║  NOVEDADES:                                          ║
-║  ► Sistema de puntuación ⭐ por palabras clave       ║
-║  ► Alerta urgente 🚨 para empresas prioritarias      ║
-║  ► Turnos destacados ⏰ en negrita                   ║
+║  ► URLs corregidas en mineras y servicios            ║
+║  ► Botones ✅ Visto / ❌ Eliminar en Telegram        ║
+║  ► Sistema de puntuación ⭐                          ║
+║  ► Alertas urgentes 🚨                               ║
+║  ► Turnos destacados ⏰                              ║
 ║  ► 62 fuentes cubiertas                              ║
-║  ► Sin dependencias externas (solo requests + bs4)   ║
 ╚══════════════════════════════════════════════════════╝
 """
 
@@ -17,13 +18,10 @@ import os, time, json, hashlib, re
 from datetime import datetime
 
 print("=" * 55)
-print("      RADAR MINERO V8 PLUS")
+print("      RADAR MINERO V8 PLUS 2")
 print(f"      {datetime.now().strftime('%d/%m/%Y %H:%M')}")
 print("=" * 55)
 
-# ─────────────────────────────────────────────────────
-# CONFIG
-# ─────────────────────────────────────────────────────
 TOKEN     = os.environ["TOKEN"]
 CHAT_ID   = os.environ["CHAT_ID"]
 SEEN_FILE = "seen_jobs.json"
@@ -39,7 +37,7 @@ HEADERS = {
 }
 
 # ─────────────────────────────────────────────────────
-# SISTEMA DE PUNTUACIÓN ⭐
+# PUNTUACIÓN
 # ─────────────────────────────────────────────────────
 PERFIL_ALTO = [
     "administrador de contrato", "administrador contrato",
@@ -51,7 +49,6 @@ PERFIL_ALTO = [
     "administrador de campamento", "camp manager",
     "facility manager", "facilities manager",
 ]
-
 PERFIL_MEDIO = [
     "ingeniero de mantenimiento", "ingeniero mantención",
     "ingeniero industrial", "ingeniería industrial",
@@ -64,23 +61,18 @@ PERFIL_MEDIO = [
     "planificacion", "planificación",
     "infraestructura", "oocc", "obras civiles",
 ]
-
 PERFIL_BAJO = [
     "ingeniero", "ingeniería", "ingenieria", "engineering",
     "mantencion", "mantención", "mantenimiento", "maintenance",
-    "supervisor", "supervisora",
-    "administrador", "administradora",
-    "operaciones", "industrial",
-    "campamento", "facility", "facilities",
+    "supervisor", "supervisora", "administrador", "administradora",
+    "operaciones", "industrial", "campamento", "facility", "facilities",
     "auditor", "calidad", "hse",
 ]
-
 TURNOS_KW = [
     "14x14", "14 x 14", "10x10", "10 x 10",
     "7x7", "7 x 7", "4x3", "4 x 3", "5x2",
     "turno rotativo", "régimen de turno", "turno minero", "faena",
 ]
-
 EXCLUIR = [
     "guardia", "vigilante", "chofer", "conductor",
     "vendedor", "vendedora", "cajero", "cajera",
@@ -93,7 +85,6 @@ EXCLUIR = [
     "operario de producción", "junior sin experiencia",
     "aseador", "aseo",
 ]
-
 UBICACIONES_KW = [
     "antofagasta", "calama", "iquique", "atacama", "copiapó", "copiapo",
     "chuquicamata", "tocopilla", "mejillones", "sierra gorda", "taltal",
@@ -103,7 +94,6 @@ UBICACIONES_KW = [
     "faena minera", "proyecto minero", "pampa",
     "quebrada blanca", "centinela", "escondida", "collahuasi", "pelambres",
 ]
-
 EMPRESAS_PRIORITARIAS = [
     "codelco", "bhp", "escondida", "spence", "collahuasi",
     "anglo american", "antofagasta minerals", "pelambres",
@@ -132,59 +122,63 @@ def hash_aviso(titulo, link):
     return hashlib.md5(f"{titulo.lower().strip()}{link.strip()}".encode()).hexdigest()
 
 # ─────────────────────────────────────────────────────
-# FILTROS Y PUNTUACIÓN
+# FILTROS
 # ─────────────────────────────────────────────────────
 def calcular_match(titulo):
     t = titulo.lower()
-    if any(p in t for p in PERFIL_ALTO):
-        return "⭐⭐⭐ MATCH PERFECTO"
-    if any(p in t for p in PERFIL_MEDIO):
-        return "⭐⭐ Buen match"
-    if any(p in t for p in PERFIL_BAJO):
-        return "⭐ Match parcial"
+    if any(p in t for p in PERFIL_ALTO):  return "⭐⭐⭐ MATCH PERFECTO"
+    if any(p in t for p in PERFIL_MEDIO): return "⭐⭐ Buen match"
+    if any(p in t for p in PERFIL_BAJO):  return "⭐ Match parcial"
     return ""
 
 def cumple_perfil(texto):
     t = texto.lower()
-    if any(x in t for x in EXCLUIR):
-        return False
-    return (any(p in t for p in PERFIL_ALTO)
-            or any(p in t for p in PERFIL_MEDIO)
-            or any(p in t for p in PERFIL_BAJO))
+    if any(x in t for x in EXCLUIR): return False
+    return any(p in t for p in PERFIL_ALTO + PERFIL_MEDIO + PERFIL_BAJO)
 
-def es_empresa_prioritaria(texto):
+def es_prioritaria(texto):
     return any(e in texto.lower() for e in EMPRESAS_PRIORITARIAS)
 
 def detectar_turno(texto):
     t = texto.lower()
     for kw in TURNOS_KW:
-        if kw.lower() in t:
-            return kw.upper()
+        if kw.lower() in t: return kw.upper()
     return None
 
 def detectar_ubicacion(texto):
     t = texto.lower()
     for u in UBICACIONES_KW:
-        if u in t:
-            return u.title()
+        if u in t: return u.title()
     return None
 
 # ─────────────────────────────────────────────────────
 # TELEGRAM
 # ─────────────────────────────────────────────────────
-def enviar(msg):
-    url_api = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+def enviar(msg, reply_markup=None):
     data = {
-        "chat_id":   CHAT_ID,
-        "text":      msg,
+        "chat_id": CHAT_ID,
+        "text": msg,
         "parse_mode": "HTML",
         "disable_web_page_preview": True,
     }
+    if reply_markup:
+        data["reply_markup"] = json.dumps(reply_markup)
     try:
-        requests.post(url_api, data=data, timeout=10).raise_for_status()
+        requests.post(
+            f"https://api.telegram.org/bot{TOKEN}/sendMessage",
+            data=data, timeout=10
+        ).raise_for_status()
     except Exception as e:
         print(f"  ⚠️  Telegram: {e}")
     time.sleep(1.2)
+
+def botones(hid):
+    return {
+        "inline_keyboard": [[
+            {"text": "✅ Visto",    "callback_data": f"visto:{hid}"},
+            {"text": "❌ Eliminar", "callback_data": f"eliminar:{hid}"},
+        ]]
+    }
 
 def formato_aviso(fuente, titulo, empresa, ubicacion, turno, link, match_str, urgente):
     if urgente:
@@ -195,15 +189,11 @@ def formato_aviso(fuente, titulo, empresa, ubicacion, turno, link, match_str, ur
         header = "🔔 <b>NUEVO EMPLEO — BUEN MATCH</b>"
     else:
         header = "🔔 <b>NUEVO EMPLEO</b>"
-
     lineas = [header, f"📋 <b>{titulo[:130]}</b>", f"🏢 {fuente}"]
     if match_str:   lineas.append(match_str)
     if empresa:     lineas.append(f"🏭 {empresa[:90]}")
     if ubicacion:   lineas.append(f"📍 {ubicacion}")
-    if turno:
-        lineas.append(f"⏰ <b>TURNO: {turno}</b> ✔️")
-    else:
-        lineas.append("⏰ Turno: no especificado")
+    lineas.append(f"⏰ <b>TURNO: {turno}</b> ✔️" if turno else "⏰ Turno: no especificado")
     if link:        lineas.append(f"🔗 {link[:300]}")
     return "\n".join(lineas)
 
@@ -219,10 +209,10 @@ def procesar_aviso(fuente, titulo, empresa, ubicacion_extra, link, vistos):
     turno     = detectar_turno(titulo)
     ubicacion = detectar_ubicacion(titulo) or ubicacion_extra
     match_str = calcular_match(titulo)
-    urgente   = es_empresa_prioritaria(f"{titulo} {empresa or ''} {fuente}")
+    urgente   = es_prioritaria(f"{titulo} {empresa or ''} {fuente}")
     msg = formato_aviso(fuente, titulo, empresa, ubicacion,
                         turno, link, match_str, urgente)
-    enviar(msg)
+    enviar(msg, reply_markup=botones(hid))
     vistos.add(hid)
     return 1
 
@@ -272,8 +262,7 @@ def scrape_portal(nombre, urls, base_url, vistos):
                 empresa = e_tag.text.strip() if e_tag else None
                 txt     = card.get_text() if hasattr(card, "get_text") else titulo
                 encontrados += procesar_aviso(
-                    nombre, titulo, empresa, detectar_ubicacion(txt),
-                    link or url, vistos)
+                    nombre, titulo, empresa, detectar_ubicacion(txt), link or url, vistos)
             time.sleep(2)
         except Exception as e:
             print(f"  ⚠️  {nombre}: {e}")
@@ -281,7 +270,8 @@ def scrape_portal(nombre, urls, base_url, vistos):
     return encontrados
 
 # ══════════════════════════════════════════════════════
-#  PORTALES ESPECIALIZADOS MINERÍA
+#  BLOQUE 1 — PORTALES ESPECIALIZADOS MINERÍA
+#  URLs apuntan directamente a secciones de empleo
 # ══════════════════════════════════════════════════════
 def scrape_trabajoenmineria(v): return scrape_portal("TrabajoenMineria.cl",
     ["https://www.trabajoenmineria.cl/ofertas",
@@ -311,7 +301,7 @@ def scrape_bolsa_mineria(v): return scrape_portal("EmpleosMineria.cl",
     "https://www.empleosmineria.cl", v)
 
 # ══════════════════════════════════════════════════════
-#  PORTALES GENERALES
+#  BLOQUE 2 — PORTALES GENERALES
 # ══════════════════════════════════════════════════════
 def scrape_trabajando(v): return scrape_portal("Trabajando.cl",
     ["https://www.trabajando.cl/trabajos-mineria",
@@ -345,7 +335,8 @@ def scrape_indeed(vistos):
                 t = card.find(["h2","h3","a"])
                 titulo = t.text.strip() if t else ""
                 l = card.find("a", href=True)
-                link = (("https://cl.indeed.com"+l["href"]) if l and not l["href"].startswith("http") else (l["href"] if l else url))
+                link = (("https://cl.indeed.com"+l["href"])
+                        if l and not l["href"].startswith("http") else (l["href"] if l else url))
                 e = card.find(class_=re.compile(r"company", re.I))
                 n += procesar_aviso("Indeed", titulo, e.text.strip() if e else None,
                     detectar_ubicacion(card.get_text()), link, vistos)
@@ -389,90 +380,273 @@ def scrape_portalempleo(v): return scrape_portal("PortalEmpleo.cl",
     "https://www.portalempleo.cl", v)
 
 # ══════════════════════════════════════════════════════
-#  MINERAS DIRECTAS
+#  BLOQUE 3 — MINERAS DIRECTAS
+#  URLs corregidas apuntando a portales de empleo reales
 # ══════════════════════════════════════════════════════
-def scrape_codelco(v):       return scrape_simple("Codelco","https://www.codelco.com/trabaja-con-nosotros/prontus_codelco/2012-01-16/120018.html","https://www.codelco.com","Codelco","Norte Chile / Varias faenas",v)
-def scrape_bhp(v):           return scrape_simple("BHP Chile","https://careers.bhp.com/search-jobs/Chile","https://careers.bhp.com","BHP","Antofagasta / Escondida / Spence",v)
-def scrape_collahuasi(v):    return scrape_simple("Collahuasi","https://www.collahuasi.cl/trabaja-con-nosotros/","https://www.collahuasi.cl","Collahuasi","Iquique / Tarapacá",v)
-def scrape_angloamerican(v): return scrape_simple("Anglo American","https://www.angloamerican.com/careers/job-search?country=Chile","https://www.angloamerican.com","Anglo American","Los Bronces / El Soldado",v)
-def scrape_aminerals(v):     return scrape_simple("Antofagasta Minerals","https://www.aminerals.cl/personas/trabaja-con-nosotros/","https://www.aminerals.cl","Ant. Minerals (Pelambres/Centinela)","Antofagasta / Pelambres",v)
-def scrape_teck(v):          return scrape_simple("Teck / QB2","https://jobs.teck.com/search/?q=chile","https://jobs.teck.com","Teck / QB2","Iquique / Tarapacá",v)
-def scrape_kinross(v):       return scrape_simple("Kinross Chile","https://careers.kinross.com/search/?q=chile","https://careers.kinross.com","Kinross","Atacama / Maricunga",v)
-def scrape_lundin(v):        return scrape_simple("Lundin Mining","https://www.lundinmining.com/about/careers/","https://www.lundinmining.com","Lundin Mining","Atacama / Candelaria",v)
-def scrape_sqm(v):           return scrape_simple("SQM Chile","https://www.sqm.com/es/nuestra-gente/trabaja-con-nosotros/","https://www.sqm.com","SQM","Antofagasta / Litio",v)
-def scrape_cap(v):           return scrape_simple("CAP Minería","https://www.capmineria.cl/personas/trabaja-con-nosotros/","https://www.capmineria.cl","CAP Minería","Atacama / CDA",v)
-def scrape_enami(v):         return scrape_simple("ENAMI","https://www.enami.cl/trabaja-con-nosotros","https://www.enami.cl","ENAMI","Norte / Centro Chile",v)
-def scrape_sierragorda(v):   return scrape_simple("Sierra Gorda SCM","https://sierragorda.cl/trabaja-con-nosotros/","https://sierragorda.cl","Sierra Gorda SCM","Antofagasta",v)
-def scrape_agnico(v):        return scrape_simple("Agnico Eagle","https://www.agnicoeagle.com/English/careers/job-opportunities/default.aspx","https://www.agnicoeagle.com","Agnico Eagle","Norte Chile",v)
-def scrape_goldfields(v):    return scrape_simple("Gold Fields Chile","https://careers.goldfields.com/search/?q=chile","https://careers.goldfields.com","Gold Fields","Atacama / Salares Norte",v)
-def scrape_lithium(v):       return scrape_simple("Lithium Americas","https://lithiumamericas.com/careers/","https://lithiumamericas.com","Lithium Americas","Antofagasta / Rincón",v)
+def scrape_codelco(v): return scrape_portal("Codelco",
+    ["https://www.trabajando.cl/empresa/codelco",
+     "https://www.laborum.cl/empleos?empresa=codelco",
+     "https://cl.indeed.com/jobs?q=codelco&l=Chile&sort=date"],
+    "https://www.trabajando.cl", v)
+
+def scrape_bhp(v): return scrape_portal("BHP / Escondida",
+    ["https://www.trabajando.cl/empresa/bhp",
+     "https://cl.indeed.com/jobs?q=bhp+escondida&l=Chile&sort=date",
+     "https://www.computrabajo.cl/trabajos-de-bhp"],
+    "https://www.trabajando.cl", v)
+
+def scrape_collahuasi(v): return scrape_portal("Collahuasi",
+    ["https://www.trabajando.cl/empresa/collahuasi",
+     "https://cl.indeed.com/jobs?q=collahuasi&l=Chile&sort=date"],
+    "https://www.trabajando.cl", v)
+
+def scrape_angloamerican(v): return scrape_portal("Anglo American",
+    ["https://www.trabajando.cl/empresa/anglo-american",
+     "https://cl.indeed.com/jobs?q=anglo+american+chile&l=Chile&sort=date"],
+    "https://www.trabajando.cl", v)
+
+def scrape_aminerals(v): return scrape_portal("Antofagasta Minerals",
+    ["https://cl.indeed.com/jobs?q=pelambres+centinela+minera&l=Chile&sort=date",
+     "https://www.trabajando.cl/empresa/minera-los-pelambres",
+     "https://www.trabajando.cl/empresa/minera-centinela"],
+    "https://www.trabajando.cl", v)
+
+def scrape_teck(v): return scrape_portal("Teck / QB2",
+    ["https://cl.indeed.com/jobs?q=teck+quebrada+blanca&l=Chile&sort=date",
+     "https://www.trabajando.cl/empresa/teck"],
+    "https://www.trabajando.cl", v)
+
+def scrape_kinross(v): return scrape_portal("Kinross Chile",
+    ["https://cl.indeed.com/jobs?q=kinross+chile&l=Chile&sort=date",
+     "https://www.trabajando.cl/empresa/kinross"],
+    "https://www.trabajando.cl", v)
+
+def scrape_lundin(v): return scrape_portal("Lundin Mining / Candelaria",
+    ["https://cl.indeed.com/jobs?q=lundin+candelaria&l=Chile&sort=date",
+     "https://www.trabajando.cl/empresa/minera-candelaria"],
+    "https://www.trabajando.cl", v)
+
+def scrape_sqm(v): return scrape_portal("SQM Chile",
+    ["https://www.trabajando.cl/empresa/sqm",
+     "https://cl.indeed.com/jobs?q=sqm+litio&l=Chile&sort=date"],
+    "https://www.trabajando.cl", v)
+
+def scrape_cap(v): return scrape_portal("CAP Minería",
+    ["https://www.trabajando.cl/empresa/cap-mineria",
+     "https://cl.indeed.com/jobs?q=cap+mineria&l=Chile&sort=date"],
+    "https://www.trabajando.cl", v)
+
+def scrape_enami(v): return scrape_portal("ENAMI",
+    ["https://cl.indeed.com/jobs?q=enami&l=Chile&sort=date",
+     "https://www.trabajando.cl/empresa/enami"],
+    "https://www.trabajando.cl", v)
+
+def scrape_sierragorda(v): return scrape_portal("Sierra Gorda SCM",
+    ["https://cl.indeed.com/jobs?q=sierra+gorda+minera&l=Chile&sort=date",
+     "https://www.trabajando.cl/empresa/sierra-gorda-scm"],
+    "https://www.trabajando.cl", v)
+
+def scrape_agnico(v): return scrape_portal("Agnico Eagle Chile",
+    ["https://cl.indeed.com/jobs?q=agnico+eagle+chile&l=Chile&sort=date"],
+    "https://cl.indeed.com", v)
+
+def scrape_goldfields(v): return scrape_portal("Gold Fields / Salares Norte",
+    ["https://cl.indeed.com/jobs?q=gold+fields+salares+norte&l=Chile&sort=date"],
+    "https://cl.indeed.com", v)
+
+def scrape_lithium(v): return scrape_portal("Lithium Americas",
+    ["https://cl.indeed.com/jobs?q=lithium+americas+chile&l=Chile&sort=date"],
+    "https://cl.indeed.com", v)
 
 # ══════════════════════════════════════════════════════
-#  CAMPAMENTOS / ALIMENTACIÓN
+#  BLOQUE 4 — CAMPAMENTOS / ALIMENTACIÓN
+#  URLs corregidas con portales de empleo verificados
 # ══════════════════════════════════════════════════════
-def scrape_compass(v):  return scrape_simple("Compass Group","https://www.compass-chile.cl/trabaja-con-nosotros/","https://www.compass-chile.cl","Compass Group","Norte Chile",v)
-def scrape_sodexo(v):   return scrape_simple("Sodexo Chile","https://jobs.sodexo.com/search/?q=chile","https://jobs.sodexo.com","Sodexo","Norte Chile",v)
-def scrape_aramark(v):  return scrape_simple("Aramark Chile","https://careers.aramark.com/search/?q=chile","https://careers.aramark.com","Aramark","Norte Chile",v)
-def scrape_eurest(v):   return scrape_simple("Eurest Chile","https://www.eurest.cl/oportunidades-laborales/","https://www.eurest.cl","Eurest","Norte Chile",v)
-def scrape_applus(v):   return scrape_simple("Applus Chile","https://www.applus.com/es/careers/job-search?country=Chile","https://www.applus.com","Applus","Norte Chile",v)
-def scrape_igt(v):      return scrape_simple("IGT Chile","https://www.igtchile.cl/trabaja-con-nosotros/","https://www.igtchile.cl","IGT Chile","Norte Chile",v)
-def scrape_cgg(v):      return scrape_simple("CGG Solutions","https://www.cggsolutions.cl/trabaja-con-nosotros/","https://www.cggsolutions.cl","CGG Solutions","Norte Chile",v)
+def scrape_compass(v): return scrape_portal("Compass Group Chile",
+    ["https://www.trabajando.cl/empresa/compass-group",
+     "https://cl.indeed.com/jobs?q=compass+group+chile&l=Chile&sort=date",
+     "https://www.computrabajo.cl/trabajos-de-compass-group"],
+    "https://www.trabajando.cl", v)
+
+def scrape_sodexo(v): return scrape_portal("Sodexo Chile",
+    ["https://www.trabajando.cl/empresa/sodexo",
+     "https://cl.indeed.com/jobs?q=sodexo+chile&l=Chile&sort=date",
+     "https://www.computrabajo.cl/trabajos-de-sodexo"],
+    "https://www.trabajando.cl", v)
+
+def scrape_aramark(v): return scrape_portal("Aramark Chile",
+    ["https://www.trabajando.cl/empresa/aramark",
+     "https://cl.indeed.com/jobs?q=aramark+chile&l=Chile&sort=date"],
+    "https://www.trabajando.cl", v)
+
+def scrape_eurest(v): return scrape_portal("Eurest Chile",
+    ["https://www.trabajando.cl/empresa/eurest",
+     "https://cl.indeed.com/jobs?q=eurest+chile&l=Chile&sort=date"],
+    "https://www.trabajando.cl", v)
+
+def scrape_applus(v): return scrape_portal("Applus Chile",
+    ["https://cl.indeed.com/jobs?q=applus+chile&l=Chile&sort=date"],
+    "https://cl.indeed.com", v)
+
+def scrape_igt(v): return scrape_portal("IGT Chile",
+    ["https://cl.indeed.com/jobs?q=igt+chile+campamento&l=Chile&sort=date"],
+    "https://cl.indeed.com", v)
+
+def scrape_cgg(v): return scrape_portal("CGG Solutions",
+    ["https://cl.indeed.com/jobs?q=cgg+solutions+chile&l=Chile&sort=date"],
+    "https://cl.indeed.com", v)
 
 # ══════════════════════════════════════════════════════
-#  INGENIERÍA / EPC / CONSTRUCCIÓN
+#  BLOQUE 5 — INGENIERÍA / EPC / CONSTRUCCIÓN
 # ══════════════════════════════════════════════════════
-def scrape_fluor(v):   return scrape_simple("Fluor Chile","https://careers.fluor.com/job-search-results/?category=Engineering&location=Chile","https://careers.fluor.com","Fluor","Norte Chile / Proyectos",v)
-def scrape_worley(v):  return scrape_simple("Worley Chile","https://careers.worley.com/jobs?location=Chile","https://careers.worley.com","Worley","Antofagasta / Santiago",v)
-def scrape_wood(v):    return scrape_simple("Wood Group","https://careers.woodplc.com/jobs?location=Chile","https://careers.woodplc.com","Wood Group","Norte Chile",v)
-def scrape_techint(v): return scrape_simple("Techint Chile","https://jobs.techint.com/jobs?country=CL","https://jobs.techint.com","Techint","Norte Chile",v)
-def scrape_maserr(v):  return scrape_simple("MAS Errázuriz","https://www.maserrazuriz.cl/trabaja-con-nosotros/","https://www.maserrazuriz.cl","MAS Errázuriz","Norte Chile",v)
-def scrape_sk(v):      return scrape_simple("Sigdo Koppers","https://www.sigdokoppers.cl/personas/trabaja-con-nosotros/","https://www.sigdokoppers.cl","Sigdo Koppers","Norte Chile",v)
-def scrape_salfa(v):   return scrape_simple("Salfa / Salfacorp","https://www.salfacorp.com/trabaja-con-nosotros/","https://www.salfacorp.com","Salfa / Salfacorp","Norte Chile",v)
-def scrape_belfi(v):   return scrape_simple("Belfi Ingeniería","https://www.belfi.cl/trabaja-con-nosotros/","https://www.belfi.cl","Belfi","Chile",v)
-def scrape_icafal(v):  return scrape_simple("Icafal Ingeniería","https://www.icafal.cl/trabaja-con-nosotros/","https://www.icafal.cl","Icafal","Chile",v)
-def scrape_vesco(v):   return scrape_simple("Vesco Consultores","https://www.vesco.cl/empleo/","https://www.vesco.cl","Vesco","Chile",v)
+def scrape_fluor(v): return scrape_portal("Fluor Chile",
+    ["https://www.trabajando.cl/empresa/fluor",
+     "https://cl.indeed.com/jobs?q=fluor+chile+ingenieria&l=Chile&sort=date"],
+    "https://www.trabajando.cl", v)
+
+def scrape_worley(v): return scrape_portal("Worley Chile",
+    ["https://cl.indeed.com/jobs?q=worley+chile&l=Chile&sort=date",
+     "https://www.trabajando.cl/empresa/worley"],
+    "https://www.trabajando.cl", v)
+
+def scrape_wood(v): return scrape_portal("Wood Group Chile",
+    ["https://cl.indeed.com/jobs?q=wood+group+chile&l=Chile&sort=date"],
+    "https://cl.indeed.com", v)
+
+def scrape_techint(v): return scrape_portal("Techint Chile",
+    ["https://www.trabajando.cl/empresa/techint",
+     "https://cl.indeed.com/jobs?q=techint+chile&l=Chile&sort=date"],
+    "https://www.trabajando.cl", v)
+
+def scrape_maserr(v): return scrape_portal("MAS Errázuriz",
+    ["https://www.trabajando.cl/empresa/mas-errazuriz",
+     "https://cl.indeed.com/jobs?q=mas+errazuriz+mineria&l=Chile&sort=date"],
+    "https://www.trabajando.cl", v)
+
+def scrape_sk(v): return scrape_portal("Sigdo Koppers",
+    ["https://www.trabajando.cl/empresa/sigdo-koppers",
+     "https://cl.indeed.com/jobs?q=sigdo+koppers&l=Chile&sort=date"],
+    "https://www.trabajando.cl", v)
+
+def scrape_salfa(v): return scrape_portal("Salfa / Salfacorp",
+    ["https://www.trabajando.cl/empresa/salfacorp",
+     "https://cl.indeed.com/jobs?q=salfacorp+salfa&l=Chile&sort=date"],
+    "https://www.trabajando.cl", v)
+
+def scrape_belfi(v): return scrape_portal("Belfi Ingeniería",
+    ["https://cl.indeed.com/jobs?q=belfi+ingenieria+chile&l=Chile&sort=date"],
+    "https://cl.indeed.com", v)
+
+def scrape_icafal(v): return scrape_portal("Icafal Ingeniería",
+    ["https://cl.indeed.com/jobs?q=icafal+ingenieria&l=Chile&sort=date"],
+    "https://cl.indeed.com", v)
+
+def scrape_vesco(v): return scrape_portal("Vesco Consultores",
+    ["https://www.trabajando.cl/empresa/vesco",
+     "https://cl.indeed.com/jobs?q=vesco+mineria&l=Chile&sort=date"],
+    "https://www.trabajando.cl", v)
 
 # ══════════════════════════════════════════════════════
-#  EQUIPOS OEM / PROVEEDORES
+#  BLOQUE 6 — EQUIPOS OEM / PROVEEDORES
 # ══════════════════════════════════════════════════════
-def scrape_komatsu(v):  return scrape_simple("Komatsu Chile","https://komatsu.jobs/search/?q=chile","https://komatsu.jobs","Komatsu","Norte Chile",v)
-def scrape_finning(v):  return scrape_simple("Finning Chile","https://jobs.finning.com/search/?q=chile","https://jobs.finning.com","Finning / Caterpillar","Antofagasta / Calama",v)
-def scrape_sandvik(v):  return scrape_simple("Sandvik Chile","https://www.sandvik.com/en/careers/job-openings/?country=Chile","https://www.sandvik.com","Sandvik","Norte Chile",v)
-def scrape_epiroc(v):   return scrape_simple("Epiroc Chile","https://careers.epiroc.com/jobs?location=Chile","https://careers.epiroc.com","Epiroc","Norte Chile",v)
-def scrape_metso(v):    return scrape_simple("Metso Outotec","https://www.metso.com/careers/open-positions/?country=Chile","https://www.metso.com","Metso Outotec","Norte Chile",v)
-def scrape_weir(v):     return scrape_simple("Weir Minerals","https://careers.weir/search/?q=chile","https://careers.weir","Weir Minerals","Norte Chile",v)
-def scrape_flsmidth(v): return scrape_simple("FLSmidth Chile","https://www.flsmidth.com/en-gb/company/careers/vacancies?country=Chile","https://www.flsmidth.com","FLSmidth","Norte Chile",v)
-def scrape_tk(v):       return scrape_simple("Thyssenkrupp","https://www.thyssenkrupp.com/en/careers/job-search?q=chile","https://www.thyssenkrupp.com","Thyssenkrupp","Norte Chile",v)
+def scrape_komatsu(v): return scrape_portal("Komatsu Chile",
+    ["https://www.trabajando.cl/empresa/komatsu",
+     "https://cl.indeed.com/jobs?q=komatsu+chile&l=Chile&sort=date"],
+    "https://www.trabajando.cl", v)
+
+def scrape_finning(v): return scrape_portal("Finning / Caterpillar Chile",
+    ["https://www.trabajando.cl/empresa/finning",
+     "https://cl.indeed.com/jobs?q=finning+caterpillar+chile&l=Chile&sort=date"],
+    "https://www.trabajando.cl", v)
+
+def scrape_sandvik(v): return scrape_portal("Sandvik Chile",
+    ["https://www.trabajando.cl/empresa/sandvik",
+     "https://cl.indeed.com/jobs?q=sandvik+chile&l=Chile&sort=date"],
+    "https://www.trabajando.cl", v)
+
+def scrape_epiroc(v): return scrape_portal("Epiroc Chile",
+    ["https://cl.indeed.com/jobs?q=epiroc+chile&l=Chile&sort=date",
+     "https://www.trabajando.cl/empresa/epiroc"],
+    "https://www.trabajando.cl", v)
+
+def scrape_metso(v): return scrape_portal("Metso Outotec Chile",
+    ["https://cl.indeed.com/jobs?q=metso+outotec+chile&l=Chile&sort=date"],
+    "https://cl.indeed.com", v)
+
+def scrape_weir(v): return scrape_portal("Weir Minerals Chile",
+    ["https://cl.indeed.com/jobs?q=weir+minerals+chile&l=Chile&sort=date"],
+    "https://cl.indeed.com", v)
+
+def scrape_flsmidth(v): return scrape_portal("FLSmidth Chile",
+    ["https://cl.indeed.com/jobs?q=flsmidth+chile&l=Chile&sort=date"],
+    "https://cl.indeed.com", v)
+
+def scrape_tk(v): return scrape_portal("Thyssenkrupp Chile",
+    ["https://cl.indeed.com/jobs?q=thyssenkrupp+chile&l=Chile&sort=date"],
+    "https://cl.indeed.com", v)
 
 # ══════════════════════════════════════════════════════
-#  INSPECCIÓN / RRHH / OTROS
+#  BLOQUE 7 — INSPECCIÓN / RRHH / OTROS
 # ══════════════════════════════════════════════════════
-def scrape_bv(v):       return scrape_simple("Bureau Veritas","https://candidatos.bureauveritas.cl/jobsearch","https://candidatos.bureauveritas.cl","Bureau Veritas","Chile",v)
-def scrape_sgs(v):      return scrape_simple("SGS Chile","https://www.sgs.com/en/careers/job-search?country=Chile","https://www.sgs.com","SGS","Norte Chile",v)
-def scrape_confip(v):   return scrape_simple("Confipetrol","https://confipetrol.cl/trabaja-con-nosotros/","https://confipetrol.cl","Confipetrol","Norte Chile",v)
-def scrape_adecco(v):   return scrape_portal("Adecco Chile",["https://www.adecco.cl/empleos/?sector=mineria","https://www.adecco.cl/empleos/?sector=ingenieria-industrial"],"https://www.adecco.cl",v)
-def scrape_hays(v):     return scrape_simple("Hays Chile","https://www.hays.cl/empleo/buscar-empleo?q=mining&location=Chile","https://www.hays.cl","Hays Recruitment","Norte Chile",v)
-def scrape_manpower(v): return scrape_portal("ManpowerGroup",["https://www.manpower.cl/empleos?q=mineria+mantenimiento","https://www.manpower.cl/empleos?q=administrador+contrato"],"https://www.manpower.cl",v)
-def scrape_randstad(v): return scrape_portal("Randstad Chile",["https://www.randstad.cl/jobs/?q=mineria","https://www.randstad.cl/jobs/?q=mantenimiento+industrial"],"https://www.randstad.cl",v)
+def scrape_bv(v): return scrape_portal("Bureau Veritas Chile",
+    ["https://www.trabajando.cl/empresa/bureau-veritas",
+     "https://cl.indeed.com/jobs?q=bureau+veritas+chile&l=Chile&sort=date"],
+    "https://www.trabajando.cl", v)
+
+def scrape_sgs(v): return scrape_portal("SGS Chile",
+    ["https://www.trabajando.cl/empresa/sgs",
+     "https://cl.indeed.com/jobs?q=sgs+chile+mineria&l=Chile&sort=date"],
+    "https://www.trabajando.cl", v)
+
+def scrape_confip(v): return scrape_portal("Confipetrol",
+    ["https://www.trabajando.cl/empresa/confipetrol",
+     "https://cl.indeed.com/jobs?q=confipetrol+chile&l=Chile&sort=date"],
+    "https://www.trabajando.cl", v)
+
+def scrape_adecco(v): return scrape_portal("Adecco Chile",
+    ["https://www.adecco.cl/empleos/?sector=mineria",
+     "https://www.adecco.cl/empleos/?sector=ingenieria-industrial"],
+    "https://www.adecco.cl", v)
+
+def scrape_hays(v): return scrape_portal("Hays Chile",
+    ["https://www.hays.cl/empleo/buscar-empleo?q=mining&location=Chile"],
+    "https://www.hays.cl", v)
+
+def scrape_manpower(v): return scrape_portal("ManpowerGroup Chile",
+    ["https://www.manpower.cl/empleos?q=mineria+mantenimiento",
+     "https://www.manpower.cl/empleos?q=administrador+contrato"],
+    "https://www.manpower.cl", v)
+
+def scrape_randstad(v): return scrape_portal("Randstad Chile",
+    ["https://www.randstad.cl/jobs/?q=mineria",
+     "https://www.randstad.cl/jobs/?q=mantenimiento+industrial"],
+    "https://www.randstad.cl", v)
 
 # ══════════════════════════════════════════════════════
 #  EJECUCIÓN PRINCIPAL
 # ══════════════════════════════════════════════════════
 FUENTES = [
+    # Portales especializados minería
     scrape_trabajoenmineria, scrape_mineria_cl, scrape_expertominero,
     scrape_minerosonline, scrape_reclutamineria, scrape_mining_people, scrape_bolsa_mineria,
+    # Portales generales
     scrape_trabajando, scrape_laborum, scrape_computrabajo,
     scrape_indeed, scrape_linkedin, scrape_bne, scrape_portalempleo,
+    # Mineras directas
     scrape_codelco, scrape_bhp, scrape_collahuasi, scrape_angloamerican,
     scrape_aminerals, scrape_teck, scrape_kinross, scrape_lundin,
     scrape_sqm, scrape_cap, scrape_enami, scrape_sierragorda,
     scrape_agnico, scrape_goldfields, scrape_lithium,
+    # Campamentos / Alimentación
     scrape_compass, scrape_sodexo, scrape_aramark, scrape_eurest,
     scrape_applus, scrape_igt, scrape_cgg,
+    # Ingeniería / EPC
     scrape_fluor, scrape_worley, scrape_wood, scrape_techint,
     scrape_maserr, scrape_sk, scrape_salfa, scrape_belfi, scrape_icafal, scrape_vesco,
+    # Equipos OEM
     scrape_komatsu, scrape_finning, scrape_sandvik, scrape_epiroc,
     scrape_metso, scrape_weir, scrape_flsmidth, scrape_tk,
+    # Inspección / RRHH
     scrape_bv, scrape_sgs, scrape_confip, scrape_adecco,
     scrape_hays, scrape_manpower, scrape_randstad,
 ]
@@ -483,7 +657,7 @@ vistos = cargar_vistos()
 print(f"\n📂 Historial: {len(vistos)} avisos procesados")
 
 enviar(
-    f"🤖 <b>RADAR MINERO V8 PLUS</b>\n"
+    f"🤖 <b>RADAR MINERO V8 PLUS 2</b>\n"
     f"🕐 {datetime.now().strftime('%d/%m/%Y %H:%M')}\n"
     f"🔍 Escaneando <b>{N} fuentes</b>\n"
     f"📊 Historial: {len(vistos)} avisos procesados"
