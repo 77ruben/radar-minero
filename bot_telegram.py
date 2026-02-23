@@ -1,7 +1,7 @@
 """
 BOT TELEGRAM - Radar Minero
-Responde botones ✅ Visto / ❌ Eliminar
-Sin dependencias externas (solo requests)
+✅ Visto  → cambia apariencia del mensaje (título en cursiva + sello de revisado)
+🗑 Eliminar → BORRA el mensaje completamente de Telegram
 """
 
 import requests
@@ -51,16 +51,49 @@ def responder_callback(callback_id, texto):
         "show_alert": False,
     })
 
-def editar_mensaje(chat_id, message_id, nuevo_texto):
+def editar_a_visto(chat_id, message_id, texto_original):
+    """
+    Reemplaza el mensaje con versión 'leída':
+    - Encabezado cambia a 👁 YA REVISADO
+    - Título pasa a cursiva
+    - Se agrega sello con hora al final
+    - Los botones desaparecen (no se envía reply_markup)
+    """
+    lineas = texto_original.split("\n")
+    nuevas = []
+    for i, linea in enumerate(lineas):
+        if i == 0:
+            # Reemplazar encabezado (🔔/🔥/🚨) por estado leído
+            nuevas.append("👁 <b>REVISADO</b>")
+        elif linea.startswith("📋"):
+            # Sacar el texto del título y ponerlo en cursiva
+            txt = re.sub(r"<[^>]+>", "", linea).replace("📋 ", "").strip()
+            nuevas.append(f"📋 <i>{txt}</i>")
+        else:
+            nuevas.append(linea)
+    nuevas.append(f"\n─────────────────────")
+    nuevas.append(f"✅ Visto el {datetime.now().strftime('%d/%m/%Y a las %H:%M')}")
+
     api("editMessageText", {
         "chat_id":    chat_id,
         "message_id": message_id,
-        "text":       nuevo_texto,
+        "text":       "\n".join(nuevas),
         "parse_mode": "HTML",
         "disable_web_page_preview": True,
+        # Sin reply_markup → los botones desaparecen
     })
 
+def eliminar_mensaje(chat_id, message_id):
+    """Borra el mensaje completamente del chat."""
+    result = api("deleteMessage", {
+        "chat_id":    chat_id,
+        "message_id": message_id,
+    })
+    if not result.get("result"):
+        print(f"  ⚠️  No se pudo eliminar msg {message_id}: {result.get('description','')}")
+
 def procesar_updates():
+    import re
     offset  = cargar_offset()
     vistos  = cargar_vistos()
     result  = api("getUpdates", {"offset": offset, "timeout": 10})
@@ -77,21 +110,24 @@ def procesar_updates():
             msg     = cb.get("message", {})
             msg_id  = msg.get("message_id")
             chat_id = msg.get("chat", {}).get("id")
-            txt     = msg.get("text", "")
+            # Telegram puede enviar text o caption
+            txt = msg.get("text") or msg.get("caption") or ""
 
+            # ── ✅ VISTO ──────────────────────────────────
             if data.startswith("visto:"):
                 hid = data.split(":", 1)[1]
                 vistos.add(hid)
                 cambios = True
-                responder_callback(cb_id, "✅ Marcado como visto — no volverá a aparecer")
-                editar_mensaje(chat_id, msg_id, txt + "\n\n✅ <b>VISTO</b>")
+                responder_callback(cb_id, "✅ Marcado como visto")
+                editar_a_visto(chat_id, msg_id, txt)
 
+            # ── 🗑 ELIMINAR ───────────────────────────────
             elif data.startswith("eliminar:"):
                 hid = data.split(":", 1)[1]
                 vistos.add(hid)
                 cambios = True
-                responder_callback(cb_id, "❌ Aviso eliminado")
-                editar_mensaje(chat_id, msg_id, txt + "\n\n❌ <b>ELIMINADO</b>")
+                responder_callback(cb_id, "🗑 Aviso eliminado")
+                eliminar_mensaje(chat_id, msg_id)
 
         offset = uid + 1
         guardar_offset(offset)
