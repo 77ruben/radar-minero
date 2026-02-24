@@ -1,158 +1,126 @@
 import requests
 from bs4 import BeautifulSoup
-import os, time, json, hashlib, re, random
+import os, time, json, hashlib
 from datetime import datetime
 import google.generativeai as genai
 
 # =====================================================
-#  1. CONFIGURACIÓN Y SECRETOS
+#  1. CONFIGURACIÓN (Secrets)
 # =====================================================
 TOKEN     = os.environ.get("TOKEN")
 CHAT_ID   = os.environ.get("CHAT_ID")
 API_KEY   = os.environ.get("GEMINI_KEY")
 
-# Configuración de IA (Reforzada)
 try:
     genai.configure(api_key=API_KEY)
     model = genai.GenerativeModel('gemini-1.5-flash')
     IA_ACTIVA = True
-except Exception as e:
-    print(f"Error inicializando IA: {e}")
+except:
     IA_ACTIVA = False
 
 SEEN_FILE = "seen_jobs.json"
 HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
 
 # =====================================================
-#  2. FUENTES Y EMPRESAS (LISTA AMPLIADA)
+#  2. LISTA DE EMPRESAS Y CARGOS (Fuentes Reales)
 # =====================================================
-# Agregamos todas las empresas de servicios y mineras críticas
-LINKS_ATS = [
-    "https://empleos.codelco.cl/search", "https://careers.bhp.com/search?location=Chile",
-    "https://ats.rankmi.com/tenants/239/organizations/kcc", "https://finning.wd3.myworkdayjobs.com/es/External",
-    "https://career8.successfactors.com/career?company=AMSAP", "https://jobs.kinross.com/search/?locationsearch=Chile",
-    "https://www.careerprofile.epiroc.com/search/?locationsearch=Chile", "https://www.home.sandvik/es-la/carreras/",
-    "https://jobs.bechtel.com/search/?locationsearch=chile", "https://jobs.worley.com/careers?location=chile",
-    "https://ehif.fa.em2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1/jobs",
-    "https://sodexo.cl/trabaja-con-nosotros/", "https://www.aramark.cl/carreras", "https://www.newrest.eu/es/ofertas-de-empleo/"
+EMPRESAS_OBJETIVO = [
+    "Codelco", "BHP", "Antofagasta Minerals", "Finning", "Komatsu", 
+    "Newrest", "Sodexo", "Aramark", "Metso", "Kinross", "Teck", "Albemarle",
+    "Sigdo Koppers", "Salfacorp", "Techint", "Bechtel", "Worley"
 ]
 
 # =====================================================
-#  3. LÓGICA DE IA (Detección de Turnos y Perfil)
+#  3. EL MOTOR DE INTELIGENCIA (Gemini)
 # =====================================================
-def analizar_con_ia_profundo(titulo, empresa, link):
-    if not IA_ACTIVA: return True, "Modo Manual", "N/A"
+def analizar_con_ia(titulo, empresa, descripcion):
+    if not IA_ACTIVA: return True, "Revisión Manual", "N/A"
     
-    # Intentamos obtener un extracto de la página si es posible para ver el turno
     prompt = (
-        f"Analiza este cargo minero para un profesional en Chile:\n"
-        f"CARGO: {titulo}\nEMPRESA: {empresa}\nURL: {link}\n\n"
-        f"INSTRUCCIONES:\n"
-        f"1. ¿Es un cargo de Jefatura, Ingeniería, Supervisión o Administración? (Responde true/false)\n"
-        f"2. Busca en el texto o deduce el turno (14x14, 7x7, 4x3, 10x10, 5x2).\n"
-        f"3. Si es un cargo operativo (conductor, aseo, ayudante), recházalo.\n\n"
-        f"RESPONDE ESTRICTAMENTE EN ESTE FORMATO JSON:\n"
-        f"{{\"valido\": true, \"motivo\": \"explicacion corta\", \"turno\": \"14x14 o N/A\"}}"
+        f"Analiza este aviso: '{titulo}' en '{empresa}'.\n"
+        f"Texto extraido: {descripcion[:500]}\n\n"
+        f"Responde SOLO JSON:\n"
+        f"{{\"profesional\": true/false, \"turno\": \"ej: 7x7\", \"porque\": \"breve\"}}"
     )
     
     try:
-        # Aumentamos el tiempo de espera para evitar el "Error IA"
         response = model.generate_content(prompt)
-        data = json.loads(response.text.replace("```json", "").replace("```", "").strip())
-        return data.get("valido"), data.get("motivo"), data.get("turno")
-    except Exception as e:
-        # Si falla, el programa sigue pero avisa el error técnico
-        return True, f"IA no respondió (Revisar manualmente)", "N/A"
+        res = json.loads(response.text.replace("```json", "").replace("```", "").strip())
+        return res.get("profesional"), res.get("porque"), res.get("turno")
+    except:
+        return True, "Error IA (Pasa a revisión)", "Ver link"
 
 # =====================================================
-#  4. MENSAJERÍA TELEGRAM (CON BOTONES)
+#  4. MENSAJERÍA (Telegram con Botones Reales)
 # =====================================================
-def enviar_telegram_v12(msg, hid):
+def enviar_telegram(titulo, empresa, turno, motivo, link, hid):
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
     
-    # El botón de "Visto" ahora es un link que no hace nada, 
-    # ya que en GitHub Actions no tenemos un servidor escuchando clics.
-    # Pero lo marcamos como 'Eliminar' visualmente.
-    botones = {
-        "inline_keyboard": [
-            [{"text": "📍 Ir al Empleo", "url": msg.split('🔗 ')[1].split('\n')[0] if '🔗 ' in msg else "https://google.cl"}],
-            [{"text": "🗑️ Marcar como Visto", "callback_data": f"visto:{hid}"}]
-        ]
-    }
+    mensaje = (
+        f"⚒️ <b>NUEVA OPORTUNIDAD MINERA</b>\n\n"
+        f"📋 <b>CARGO:</b> {titulo.upper()}\n"
+        f"🏢 <b>EMPRESA:</b> {empresa}\n"
+        f"⏰ <b>TURNO:</b> {turno}\n"
+        f"🤖 <b>IA:</b> {motivo}\n\n"
+        f"🔗 <a href='{link}'>POSTULAR AQUÍ</a>"
+    )
     
-    payload = {
-        "chat_id": CHAT_ID,
-        "text": msg,
-        "parse_mode": "HTML",
-        "reply_markup": json.dumps(botones)
-    }
+    # Botón de "Visto" que redirige a una confirmación (para que no de error)
+    botones = {"inline_keyboard": [[{"text": "✅ Marcar como Visto", "url": "https://t.me/TuBotName?start=visto"}]]}
+    
+    payload = {"chat_id": CHAT_ID, "text": mensaje, "parse_mode": "HTML", "reply_markup": json.dumps(botones)}
     requests.post(url, json=payload, timeout=10)
 
 # =====================================================
-#  5. MOTORES DE BÚSQUEDA (EL CORAZÓN DEL RADAR)
+#  5. SCRAPERS (Fuentes que NO bloquean)
 # =====================================================
-def buscar_empleos(vistos):
-    nuevos = 0
-    
-    # MOTOR 1: LINKS DIRECTOS (ATS)
-    for url in LINKS_ATS:
-        print(f"Escaneando: {url}")
+def buscar_en_portales(vistos):
+    encontrados = 0
+    # Usamos Computrabajo e Indeed como "espejos" de las webs oficiales
+    for empresa in EMPRESAS_OBJETIVO:
+        print(f"Buscando {empresa}...")
+        # Lógica Computrabajo (Es la más estable en Chile)
+        slug = empresa.lower().replace(" ", "-")
+        url = f"https://www.computrabajo.cl/trabajos-de-{slug}"
+        
         try:
-            r = requests.get(url, headers=HEADERS, timeout=20)
+            r = requests.get(url, headers=HEADERS, timeout=15)
             soup = BeautifulSoup(r.text, "html.parser")
-            # Buscamos todos los links que parezcan trabajos
-            for a in soup.find_all("a", href=True):
-                titulo = a.get_text(strip=True)
-                if len(titulo) > 15: # Evitar links cortos como 'Home'
-                    link = a['href']
-                    if not link.startswith("http"): link = url.split('.cl')[0] + ".cl" + link
-                    
-                    hid = hashlib.md5(f"{titulo}".encode()).hexdigest()
-                    if hid not in vistos:
-                        valido, motivo, turno = analizar_con_ia_profundo(titulo, "Ver en Link", link)
-                        if valido:
-                            msg = (
-                                f"🚀 <b>RADAR MINERO: NUEVO AVISO</b>\n\n"
-                                f"💼 <b>CARGO:</b> {titulo.upper()}\n"
-                                f"🏢 <b>EMPRESA:</b> Analizando...\n"
-                                f"⏰ <b>TURNO:</b> {turno}\n"
-                                f"🤖 <b>MOTIVO:</b> {motivo}\n\n"
-                                f"🔗 {link}\n"
-                                f"📍 <b>WEB:</b> Portal Corporativo"
-                            )
-                            enviar_telegram_v12(msg, hid)
-                            vistos.add(hid)
-                            nuevos += 1
+            
+            for oferta in soup.find_all("article", class_="box_offer"):
+                titulo_tag = oferta.find("a", class_="js-o-link")
+                if not titulo_tag: continue
+                
+                titulo = titulo_tag.get_text(strip=True)
+                link = "https://www.computrabajo.cl" + titulo_tag['href']
+                descripcion = oferta.find("p").get_text(strip=True) if oferta.find("p") else ""
+                
+                hid = hashlib.md5(f"{titulo}{empresa}".encode()).hexdigest()
+                if hid in vistos: continue
+                
+                # LA IA ANALIZA EL TEXTO REAL DE LA DESCRIPCIÓN
+                es_valido, motivo, turno = analizar_con_ia(titulo, empresa, descripcion)
+                
+                if es_valido:
+                    enviar_telegram(titulo, empresa, turno, motivo, link, hid)
+                    vistos.add(hid)
+                    encontrados += 1
+            
+            time.sleep(2) # Respeto al servidor
         except: continue
-
-    # MOTOR 2: FACEBOOK (Búsqueda vía Google para evitar bloqueos)
-    # Buscamos publicaciones de las últimas 24 horas en grupos de Facebook mineros
-    fb_query = "site:facebook.com 'oferta laboral' mineria chile 14x14"
-    url_fb = f"https://www.google.com/search?q={fb_query.replace(' ', '+')}&tbs=qdr:d"
-    try:
-        r = requests.get(url_fb, headers=HEADERS)
-        soup = BeautifulSoup(r.text, "html.parser")
-        for g in soup.find_all('div', class_='tF2Cxc'):
-            link = g.find('a')['href']
-            titulo = g.find('h3').get_text()
-            hid = hashlib.md5(link.encode()).hexdigest()
-            if hid not in vistos:
-                enviar_telegram_v12(f"📱 <b>HALLAZGO EN REDES (FB)</b>\n\n{titulo}\n\n🔗 {link}", hid)
-                vistos.add(hid)
-                nuevos += 1
-    except: pass
-    
-    return nuevos
+        
+    return encontrados
 
 # =====================================================
-#  6. EJECUCIÓN
+#  6. MAIN
 # =====================================================
 if __name__ == "__main__":
     if os.path.exists(SEEN_FILE):
         with open(SEEN_FILE, "r") as f: vistos = set(json.load(f))
     else: vistos = set()
 
-    encontrados = buscar_empleos(vistos)
+    print(f"🚀 Iniciando Radar V14 Pro...")
+    nuevos = buscar_en_portales(vistos)
     
     with open(SEEN_FILE, "w") as f: json.dump(list(vistos), f)
-    print(f"Escaneo terminado. {encontrados} nuevos.")
+    print(f"✅ Finalizado. Nuevos: {nuevos}")
