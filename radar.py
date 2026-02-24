@@ -1,99 +1,45 @@
-"""
-DEBUG RADAR V16 - DIAGNÓSTICO TOTAL
-"""
-import os, json, requests, hashlib
-from google import genai
-from google.genai import types
+import os
+import sys
 
-# ─────────────────────────────────────────
-# CARGA DE CREDENCIALES
-# ─────────────────────────────────────────
-TOKEN     = os.environ.get("TOKEN", "").strip()
-CHAT_ID   = os.environ.get("CHAT_ID", "").strip()
+# Intentar importar la librería y capturar el error exacto
+try:
+    from google import genai
+    from google.genai import types
+    LIB_INSTALADA = True
+except ImportError as e:
+    LIB_INSTALADA = False
+    ERROR_IMPORT = str(e)
+
+import requests
+
+TOKEN = os.environ.get("TOKEN", "").strip()
+CHAT_ID = os.environ.get("CHAT_ID", "").strip()
 GEMINI_KEY = os.environ.get("GEMINI_KEY", "").strip()
 
-print(f"DEBUG: Token cargado: {'SI' if TOKEN else 'NO'}")
-print(f"DEBUG: Chat ID cargado: {'SI' if CHAT_ID else 'NO'}")
-print(f"DEBUG: Gemini Key cargada: {'SI' if GEMINI_KEY else 'NO'}")
+def enviar_error_telegram(msg):
+    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+    requests.post(url, json={"chat_id": CHAT_ID, "text": f"❌ DEBUG IA:\n{msg}"})
 
-# ─────────────────────────────────────────
-# PRUEBA 1: GOOGLE GENAI (IA)
-# ─────────────────────────────────────────
-def test_ia():
-    print("--- 🧠 INICIANDO PRUEBA DE IA ---")
+def probar_ia():
+    if not LIB_INSTALADA:
+        enviar_error_telegram(f"Librería google-genai no encontrada. Error: {ERROR_IMPORT}")
+        return
+
     if not GEMINI_KEY:
-        print("❌ ERROR: No hay llave de Gemini en secretos.")
-        return None
+        enviar_error_telegram("La GEMINI_KEY está vacía en los Secretos de GitHub.")
+        return
+
     try:
+        # Intento de conexión simple
         client = genai.Client(api_key=GEMINI_KEY)
         response = client.models.generate_content(
             model="gemini-2.0-flash",
-            contents="Saluda a Ruben Morales en una frase breve sobre mineria.",
-            config=types.GenerateContentConfig(temperature=0.7)
+            contents="Hola"
         )
-        print(f"✅ IA RESPONDE: {response.text.strip()}")
-        return client
+        enviar_error_telegram(f"✅ ¡CONEXIÓN EXITOSA! La IA respondió: {response.text}")
     except Exception as e:
-        print(f"❌ ERROR IA: {e}")
-        return None
+        # Esto nos enviará el error real (si es la clave, el modelo, o la red)
+        enviar_error_telegram(f"Error al conectar con Gemini: {str(e)}")
 
-# ─────────────────────────────────────────
-# PRUEBA 2: TELEGRAM
-# ─────────────────────────────────────────
-def test_telegram(mensaje):
-    print("--- 📨 INICIANDO PRUEBA DE TELEGRAM ---")
-    if not TOKEN or not CHAT_ID:
-        print("❌ ERROR: Faltan credenciales de Telegram.")
-        return
-    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-    payload = {"chat_id": CHAT_ID, "text": mensaje, "parse_mode": "HTML"}
-    try:
-        r = requests.post(url, json=payload, timeout=10)
-        if r.status_code == 200:
-            print("✅ MENSAJE ENVIADO A TELEGRAM")
-        else:
-            print(f"❌ ERROR TELEGRAM: {r.status_code} - {r.text}")
-    except Exception as e:
-        print(f"❌ ERROR CONEXIÓN TELEGRAM: {e}")
-
-# ─────────────────────────────────────────
-# PRUEBA 3: INTEGRACIÓN TOTAL (Simular un aviso real)
-# ─────────────────────────────────────────
-def test_aviso_completo(client):
-    print("--- ⚡ INICIANDO INTEGRACIÓN COMPLETA ---")
-    titulo = "SUPERVISOR DE MANTENCIÓN - CENTINELA (PRUEBA)"
-    empresa = "Antofagasta Minerals"
-    texto_aviso = "Se busca Supervisor con 10 años de experiencia en SAP PM para turno 7x7 en faena norte."
-
-    prompt = (
-        f"Analiza este aviso para Ruben Morales (Ingeniero Industrial). "
-        f"Aviso: {titulo} en {empresa}. Texto: {texto_aviso}. "
-        f"Responde SOLO JSON: {{\"puntaje\": 10, \"porque\": \"Test de sistema\", \"carta\": \"Hola, soy Ruben...\"}}"
-    )
-
-    try:
-        resp = client.models.generate_content(
-            model="gemini-2.0-flash",
-            contents=prompt,
-            config=types.GenerateContentConfig(response_mime_type="application/json")
-        )
-        data = json.loads(resp.text)
-        msg = (
-            f"🚀 <b>TEST DE INTEGRACIÓN EXITOSO</b>\n\n"
-            f"📋 {titulo}\n"
-            f"🏭 {empresa}\n"
-            f"⭐ Puntaje IA: {data['puntaje']}/10\n"
-            f"🤖 <i>{data['porque']}</i>\n\n"
-            f"📄 Carta generada correctamente."
-        )
-        test_telegram(msg)
-    except Exception as e:
-        print(f"❌ FALLO INTEGRACIÓN: {e}")
-
-# EJECUCIÓN DEL DIAGNÓSTICO
 if __name__ == "__main__":
-    client = test_ia()
-    if client:
-        test_aviso_completo(client)
-    else:
-        test_telegram("⚠️ Error en el Radar: La IA no pudo conectarse. Revisa los logs.")
+    probar_ia()
