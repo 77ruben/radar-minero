@@ -1,38 +1,92 @@
-name: Radar Minero V10 IA
+name: Radar Minero V15 ULTIMATE
 
 on:
   schedule:
-    - cron: '0 */6 * * *'
-  workflow_dispatch:
+    - cron: '0 */6 * * *'   # cada 6 horas (00:00, 06:00, 12:00, 18:00 UTC)
+  workflow_dispatch:          # boton manual en GitHub
 
 jobs:
-  build:
+
+  # ── JOB 1: El radar principal ───────────────────────────
+  radar:
+    name: Escanear empleos
     runs-on: ubuntu-latest
+    timeout-minutes: 25
+
     steps:
-      - name: Checkout del código
-        uses: actions/checkout@v3
+      - name: Checkout repositorio
+        uses: actions/checkout@v4
 
-      - name: Configurar Python
-        uses: actions/setup-python@v4
+      - name: Cache seen_jobs y cartas
+        uses: actions/cache@v4
         with:
-          python-version: '3.9'
+          path: |
+            seen_jobs.json
+            cartas_pendientes.json
+            bot_stats.json
+          key: radar-data-${{ runner.os }}
+          restore-keys: radar-data-
 
-      - name: Instalar Librerias Profesionales
-        run: |
-          python -m pip install --upgrade pip
-          pip install requests beautifulsoup4 google-generativeai
+      - name: Instalar dependencias
+        run: pip install requests beautifulsoup4 google-generativeai
 
-      - name: Ejecutar Radar
+      - name: Ejecutar Radar V15
         env:
-          TOKEN: ${{ secrets.TOKEN }}
-          CHAT_ID: ${{ secrets.CHAT_ID }}
+          TOKEN:      ${{ secrets.TOKEN }}
+          CHAT_ID:    ${{ secrets.CHAT_ID }}
           GEMINI_KEY: ${{ secrets.GEMINI_KEY }}
         run: python radar.py
 
-      - name: Guardar historial
-        run: |
-          git config --global user.name "GitHub Action"
-          git config --global user.email "actions@github.com"
-          git add seen_jobs.json
-          git commit -m "Update seen jobs" || exit 0
-          git push
+      - name: Guardar historial actualizado
+        uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: |
+            seen_jobs.json
+            cartas_pendientes.json
+            bot_stats.json
+          key: radar-data-${{ runner.os }}-${{ github.run_number }}
+
+  # ── JOB 2: Bot Telegram (responde botones) ─────────────
+  bot:
+    name: Procesar botones Telegram
+    runs-on: ubuntu-latest
+    needs: radar
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout repositorio
+        uses: actions/checkout@v4
+
+      - name: Restaurar datos compartidos
+        uses: actions/cache@v4
+        with:
+          path: |
+            seen_jobs.json
+            cartas_pendientes.json
+            bot_stats.json
+            bot_offset.json
+          key: radar-data-${{ runner.os }}-${{ github.run_number }}
+          restore-keys: |
+            radar-data-${{ runner.os }}-
+            radar-data-
+
+      - name: Instalar dependencias
+        run: pip install requests
+
+      - name: Ejecutar Bot
+        env:
+          TOKEN:   ${{ secrets.TOKEN }}
+          CHAT_ID: ${{ secrets.CHAT_ID }}
+        run: python bot_telegram.py
+
+      - name: Guardar estado del bot
+        uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: |
+            seen_jobs.json
+            cartas_pendientes.json
+            bot_stats.json
+            bot_offset.json
+          key: bot-data-${{ runner.os }}-${{ github.run_number }}
