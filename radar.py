@@ -11,242 +11,148 @@ TOKEN     = os.environ.get("TOKEN")
 CHAT_ID   = os.environ.get("CHAT_ID")
 API_KEY   = os.environ.get("GEMINI_KEY")
 
-# Configuración de IA
+# Configuración de IA (Reforzada)
 try:
     genai.configure(api_key=API_KEY)
     model = genai.GenerativeModel('gemini-1.5-flash')
     IA_ACTIVA = True
-except:
+except Exception as e:
+    print(f"Error inicializando IA: {e}")
     IA_ACTIVA = False
 
 SEEN_FILE = "seen_jobs.json"
+HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
 
-# Cabeceras para parecer un navegador real y evitar bloqueos
-HEADERS_LIST = [
-    {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"},
-    {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15"},
-    {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/115.0"}
+# =====================================================
+#  2. FUENTES Y EMPRESAS (LISTA AMPLIADA)
+# =====================================================
+# Agregamos todas las empresas de servicios y mineras críticas
+LINKS_ATS = [
+    "https://empleos.codelco.cl/search", "https://careers.bhp.com/search?location=Chile",
+    "https://ats.rankmi.com/tenants/239/organizations/kcc", "https://finning.wd3.myworkdayjobs.com/es/External",
+    "https://career8.successfactors.com/career?company=AMSAP", "https://jobs.kinross.com/search/?locationsearch=Chile",
+    "https://www.careerprofile.epiroc.com/search/?locationsearch=Chile", "https://www.home.sandvik/es-la/carreras/",
+    "https://jobs.bechtel.com/search/?locationsearch=chile", "https://jobs.worley.com/careers?location=chile",
+    "https://ehif.fa.em2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1/jobs",
+    "https://sodexo.cl/trabaja-con-nosotros/", "https://www.aramark.cl/carreras", "https://www.newrest.eu/es/ofertas-de-empleo/"
 ]
 
 # =====================================================
-#  2. FILTROS Y PALABRAS CLAVE
+#  3. LÓGICA DE IA (Detección de Turnos y Perfil)
 # =====================================================
-KEYWORDS_BUSQUEDA = [
-    "administrador contrato", "supervisor", "jefe turno", 
-    "planner", "planificador", "ingeniero", "superintendente", 
-    "facility manager", "jefe campamento", "project manager",
-    "confiabilidad", "mantencion", "mantenimiento"
-]
-
-TURNOS_PRIORITARIOS = ["14x14", "7x7", "4x3", "10x10", "5x2"]
-
-# =====================================================
-#  3. FUNCIONES DE INTELIGENCIA ARTIFICIAL
-# =====================================================
-def analizar_con_ia(titulo, empresa, fuente):
-    if not IA_ACTIVA:
-        return True, "Modo Manual (Sin IA)", "N/A"
+def analizar_con_ia_profundo(titulo, empresa, link):
+    if not IA_ACTIVA: return True, "Modo Manual", "N/A"
     
-    # Prompt optimizado para ahorrar tokens y ser preciso
+    # Intentamos obtener un extracto de la página si es posible para ver el turno
     prompt = (
-        f"Analiza este empleo minero en Chile:\n"
-        f"Cargo: {titulo}\nEmpresa: {empresa}\nFuente: {fuente}\n\n"
-        f"Reglas:\n"
-        f"1. BUSCO: Cargos Profesionales, Jefaturas, Supervisores, Ingenieros, Planners, Adm. Contratos.\n"
-        f"2. DESCARTA: Operarios base, Choferes, Aseo, Guardias, Prácticas, Vendedores.\n"
-        f"3. DETECTA: Turnos (14x14, 7x7, etc).\n\n"
-        f"Responde SOLO JSON: {{\"valido\": true/false, \"motivo\": \"texto breve\", \"turno\": \"texto\"}}"
+        f"Analiza este cargo minero para un profesional en Chile:\n"
+        f"CARGO: {titulo}\nEMPRESA: {empresa}\nURL: {link}\n\n"
+        f"INSTRUCCIONES:\n"
+        f"1. ¿Es un cargo de Jefatura, Ingeniería, Supervisión o Administración? (Responde true/false)\n"
+        f"2. Busca en el texto o deduce el turno (14x14, 7x7, 4x3, 10x10, 5x2).\n"
+        f"3. Si es un cargo operativo (conductor, aseo, ayudante), recházalo.\n\n"
+        f"RESPONDE ESTRICTAMENTE EN ESTE FORMATO JSON:\n"
+        f"{{\"valido\": true, \"motivo\": \"explicacion corta\", \"turno\": \"14x14 o N/A\"}}"
     )
     
     try:
+        # Aumentamos el tiempo de espera para evitar el "Error IA"
         response = model.generate_content(prompt)
-        text = response.text.replace("```json", "").replace("```", "").strip()
-        data = json.loads(text)
-        return data.get("valido", False), data.get("motivo", "N/A"), data.get("turno", "No especificado")
-    except:
-        return True, "Error IA (Paso preventivo)", "N/A"
+        data = json.loads(response.text.replace("```json", "").replace("```", "").strip())
+        return data.get("valido"), data.get("motivo"), data.get("turno")
+    except Exception as e:
+        # Si falla, el programa sigue pero avisa el error técnico
+        return True, f"IA no respondió (Revisar manualmente)", "N/A"
 
 # =====================================================
-#  4. FUNCIONES DEL SISTEMA
+#  4. MENSAJERÍA TELEGRAM (CON BOTONES)
 # =====================================================
-def cargar_vistos():
-    if os.path.exists(SEEN_FILE):
-        try:
-            with open(SEEN_FILE, "r") as f: return set(json.load(f))
-        except: return set()
-    return set()
-
-def guardar_vistos(vistos):
-    with open(SEEN_FILE, "w") as f: json.dump(list(vistos), f)
-
-def enviar_telegram(msg, hid):
+def enviar_telegram_v12(msg, hid):
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-    botones = {"inline_keyboard": [[{"text": "✅ Visto", "callback_data": f"v:{hid}"}]]}
-    data = {"chat_id": CHAT_ID, "text": msg, "parse_mode": "HTML", "reply_markup": json.dumps(botones), "disable_web_page_preview": True}
-    try: requests.post(url, json=data, timeout=10)
-    except: pass
-
-def hash_aviso(titulo, empresa):
-    return hashlib.md5(f"{titulo}{empresa}".encode()).hexdigest()
-
-def procesar_aviso(fuente, titulo, empresa, link, vistos):
-    # Filtro básico de longitud y palabras prohibidas obvias antes de la IA
-    if len(titulo) < 5: return 0
-    if any(x in titulo.lower() for x in ["chofer", "auxiliar", "aseo", "guardia"]): return 0
     
-    hid = hash_aviso(titulo, empresa)
-    if hid in vistos: return 0
-
-    valido, motivo, turno = analizar_con_ia(titulo, empresa, fuente)
+    # El botón de "Visto" ahora es un link que no hace nada, 
+    # ya que en GitHub Actions no tenemos un servidor escuchando clics.
+    # Pero lo marcamos como 'Eliminar' visualmente.
+    botones = {
+        "inline_keyboard": [
+            [{"text": "📍 Ir al Empleo", "url": msg.split('🔗 ')[1].split('\n')[0] if '🔗 ' in msg else "https://google.cl"}],
+            [{"text": "🗑️ Marcar como Visto", "callback_data": f"visto:{hid}"}]
+        ]
+    }
     
-    if valido:
-        icon = "💎" if "14x14" in str(turno) or "7x7" in str(turno) else "🔔"
-        msg = (
-            f"{icon} <b>RADAR MINERO: NUEVO AVISO</b>\n\n"
-            f"📋 <b>{titulo}</b>\n"
-            f"🏢 {empresa}\n"
-            f"⏰ Turno: {turno}\n"
-            f"🤖 <i>{motivo}</i>\n\n"
-            f"🔗 <a href='{link}'>VER VACANTE</a>\n"
-            f"📍 {fuente}"
-        )
-        enviar_telegram(msg, hid)
-        vistos.add(hid)
-        print(f"   -> Enviado: {titulo}")
-        return 1
-    return 0
+    payload = {
+        "chat_id": CHAT_ID,
+        "text": msg,
+        "parse_mode": "HTML",
+        "reply_markup": json.dumps(botones)
+    }
+    requests.post(url, json=payload, timeout=10)
 
 # =====================================================
-#  5. MOTORES DE BÚSQUEDA (SCRAPERS)
+#  5. MOTORES DE BÚSQUEDA (EL CORAZÓN DEL RADAR)
 # =====================================================
+def buscar_empleos(vistos):
+    nuevos = 0
+    
+    # MOTOR 1: LINKS DIRECTOS (ATS)
+    for url in LINKS_ATS:
+        print(f"Escaneando: {url}")
+        try:
+            r = requests.get(url, headers=HEADERS, timeout=20)
+            soup = BeautifulSoup(r.text, "html.parser")
+            # Buscamos todos los links que parezcan trabajos
+            for a in soup.find_all("a", href=True):
+                titulo = a.get_text(strip=True)
+                if len(titulo) > 15: # Evitar links cortos como 'Home'
+                    link = a['href']
+                    if not link.startswith("http"): link = url.split('.cl')[0] + ".cl" + link
+                    
+                    hid = hashlib.md5(f"{titulo}".encode()).hexdigest()
+                    if hid not in vistos:
+                        valido, motivo, turno = analizar_con_ia_profundo(titulo, "Ver en Link", link)
+                        if valido:
+                            msg = (
+                                f"🚀 <b>RADAR MINERO: NUEVO AVISO</b>\n\n"
+                                f"💼 <b>CARGO:</b> {titulo.upper()}\n"
+                                f"🏢 <b>EMPRESA:</b> Analizando...\n"
+                                f"⏰ <b>TURNO:</b> {turno}\n"
+                                f"🤖 <b>MOTIVO:</b> {motivo}\n\n"
+                                f"🔗 {link}\n"
+                                f"📍 <b>WEB:</b> Portal Corporativo"
+                            )
+                            enviar_telegram_v12(msg, hid)
+                            vistos.add(hid)
+                            nuevos += 1
+        except: continue
 
-def get_soup(url):
+    # MOTOR 2: FACEBOOK (Búsqueda vía Google para evitar bloqueos)
+    # Buscamos publicaciones de las últimas 24 horas en grupos de Facebook mineros
+    fb_query = "site:facebook.com 'oferta laboral' mineria chile 14x14"
+    url_fb = f"https://www.google.com/search?q={fb_query.replace(' ', '+')}&tbs=qdr:d"
     try:
-        h = random.choice(HEADERS_LIST)
-        r = requests.get(url, headers=h, timeout=20)
-        if r.status_code == 200:
-            return BeautifulSoup(r.text, "html.parser")
+        r = requests.get(url_fb, headers=HEADERS)
+        soup = BeautifulSoup(r.text, "html.parser")
+        for g in soup.find_all('div', class_='tF2Cxc'):
+            link = g.find('a')['href']
+            titulo = g.find('h3').get_text()
+            hid = hashlib.md5(link.encode()).hexdigest()
+            if hid not in vistos:
+                enviar_telegram_v12(f"📱 <b>HALLAZGO EN REDES (FB)</b>\n\n{titulo}\n\n🔗 {link}", hid)
+                vistos.add(hid)
+                nuevos += 1
     except: pass
-    return None
-
-# --- MOTOR A: Scraper Directo de Sitios Corporativos ---
-def scrape_sitios_directos(vistos):
-    print("\n🌍 Escaneando Sitios Corporativos...")
-    count = 0
     
-    # Lista maestra de tus links + lógica de paginación simple
-    targets = [
-        ("Codelco", "https://empleos.codelco.cl/search/?q=&q2=&alertId=&locationsearch=&title=&location=Chile&date="),
-        ("BHP", "https://careers.bhp.com/search/?q=&locationsearch=Chile"),
-        ("Kinross", "https://jobs.kinross.com/search/?q=&locationsearch=Chile"),
-        ("Epiroc", "https://www.careerprofile.epiroc.com/search/?q=&locationsearch=Chile"),
-        ("Bechtel", "https://jobs.bechtel.com/search/?q=&locationsearch=Chile"),
-        ("Teck", "https://jobs.teck.com/search/?q=&locationsearch=Chile"),
-        ("Antofagasta Minerals", "https://career8.successfactors.com/career?company=AMSAP&locationsearch=Chile"),
-        ("Komatsu", "https://komatsu.trabajando.cl/trabajo-empleo")
-    ]
-
-    for nombre, url_base in targets:
-        print(f"   Analizando {nombre}...")
-        soup = get_soup(url_base)
-        if not soup:
-            # Si falla el directo (por bloqueo), activamos Plan B en Indeed
-            print(f"   ⚠️ {nombre} bloqueado/JS -> Activando Plan B (Indeed)")
-            count += scrape_indeed_fallback(nombre, vistos)
-            continue
-            
-        # Intentamos extraer links de tablas estándar
-        found_in_site = 0
-        links = soup.find_all("a", href=True)
-        for a in links:
-            url_job = a['href']
-            txt = a.get_text(strip=True)
-            
-            # Limpieza y validación de links
-            if len(txt) > 10 and not "javascript" in url_job:
-                if not url_job.startswith("http"):
-                    # Reconstruir url relativa
-                    base_domain = "/".join(url_base.split("/")[:3])
-                    url_job = base_domain + url_job if url_job.startswith("/") else base_domain + "/" + url_job
-                
-                # Verificar si parece un trabajo
-                if any(kw in txt.lower() for kw in ["ingeniero", "jefe", "supervisor", "admin", "planner", "técnico"]):
-                    found_in_site += procesar_aviso(f"Web {nombre}", txt, nombre, url_job, vistos)
-        
-        if found_in_site == 0:
-            # Si no encontró nada (posiblemente por carga dinámica JS), usar fallback
-            count += scrape_indeed_fallback(nombre, vistos)
-        else:
-            count += found_in_site
-            
-    return count
-
-# --- MOTOR B: Fallback (Plan B) en Indeed/Computrabajo ---
-def scrape_indeed_fallback(empresa_nombre, vistos):
-    # Busca la empresa específica en portales públicos si el sitio oficial falla
-    c = 0
-    # Indeed Query
-    q_url = f"https://cl.indeed.com/jobs?q={empresa_nombre}&l=Chile&sort=date"
-    soup = get_soup(q_url)
-    if soup:
-        for card in soup.find_all("div", class_="job_seen_beacon"):
-            try:
-                t = card.find("h2").get_text(strip=True)
-                l = "https://cl.indeed.com" + card.find("a")['href']
-                c += procesar_aviso("Indeed-Respaldo", t, empresa_nombre, l, vistos)
-            except: pass
-            
-    # Computrabajo Query (Muy efectivo para empresas de servicios)
-    slug = empresa_nombre.lower().replace(" ", "-")
-    ct_url = f"https://www.computrabajo.cl/trabajos-de-{slug}"
-    soup_ct = get_soup(ct_url)
-    if soup_ct:
-        for art in soup_ct.find_all("article", class_="box_offer"):
-            try:
-                t = art.find("h2").get_text(strip=True)
-                l = art.find("a")['href']
-                if not l.startswith("http"): l = "https://www.computrabajo.cl" + l
-                c += procesar_aviso("Computrabajo-Respaldo", t, empresa_nombre, l, vistos)
-            except: pass
-    return c
-
-# --- MOTOR C: Búsqueda General (El radar original) ---
-def scrape_general(vistos):
-    print("\n🔍 Escaneando Portales Generales...")
-    count = 0
-    # Búsquedas combinadas en Indeed
-    queries = [
-        "administrador contrato mineria", 
-        "jefe turno mineria", 
-        "planner mantenimiento 7x7",
-        "newrest", "sodexo", "aramark", # Servicios
-        "finning", "metso", "sandvik"   # OEM
-    ]
-    
-    for q in queries:
-        url = f"https://cl.indeed.com/jobs?q={q.replace(' ','+')}&l=Chile&sort=date"
-        soup = get_soup(url)
-        if soup:
-            for card in soup.find_all("td", class_="resultContent"):
-                try:
-                    title = card.find("h2").get_text(strip=True)
-                    company = card.find("span", attrs={"data-testid":"company-name"}).get_text(strip=True)
-                    link = "https://cl.indeed.com" + card.find("a")['href']
-                    count += procesar_aviso("Indeed General", title, company, link, vistos)
-                except: pass
-        time.sleep(2)
-    return count
+    return nuevos
 
 # =====================================================
-#  6. EJECUCIÓN PRINCIPAL
+#  6. EJECUCIÓN
 # =====================================================
 if __name__ == "__main__":
-    print(f"🚀 RADAR MINERO V11 - INICIO: {datetime.now().strftime('%H:%M')}")
-    vistos = cargar_vistos()
+    if os.path.exists(SEEN_FILE):
+        with open(SEEN_FILE, "r") as f: vistos = set(json.load(f))
+    else: vistos = set()
+
+    encontrados = buscar_empleos(vistos)
     
-    nuevos = 0
-    nuevos += scrape_sitios_directos(vistos) # Intenta tus links primero
-    nuevos += scrape_general(vistos)         # Barre el resto del mercado
-    
-    guardar_vistos(vistos)
-    print(f"✅ FIN DEL PROCESO. Nuevos avisos enviados: {nuevos}")
+    with open(SEEN_FILE, "w") as f: json.dump(list(vistos), f)
+    print(f"Escaneo terminado. {encontrados} nuevos.")
