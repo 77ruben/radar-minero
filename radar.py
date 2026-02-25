@@ -7,12 +7,30 @@ CHAT_ID = os.environ["CHAT_ID"]
 
 MEMORIA_FILE = "memoria.json"
 
-# Cargar memoria
 try:
     with open(MEMORIA_FILE,"r") as f:
         memoria = json.load(f)
 except:
     memoria = []
+
+FUENTES = {
+
+"Codelco":
+"https://jobs.codelco.cl/search/?createNewAlert=false&q=&locationsearch=",
+
+"Antofagasta Minerals":
+"https://careers.antofagasta.co.uk/search/",
+
+"Komatsu":
+"https://komatsu.jobs/search-jobs",
+
+"Finning":
+"https://finning.com/es_CL/careers",
+
+"Liebherr":
+"https://www.liebherr.com/en/cll/career/job-vacancies/job-vacancies.html"
+
+}
 
 def enviar(msg):
 
@@ -21,59 +39,45 @@ def enviar(msg):
         data={"chat_id":CHAT_ID,"text":msg}
     )
 
-enviar("RADAR MINERO V10 INICIADO")
+enviar("RADAR V11 MULTIMINERA INICIADO")
 
 nuevos = 0
 revisados = 0
 
-# FUENTE 1 — Indeed JSON real
+headers = {"User-Agent":"Mozilla/5.0"}
 
-url = "https://cl.indeed.com/jobs?q=minera&l=Chile&format=json"
+for nombre,url in FUENTES.items():
 
-headers = {
-"User-Agent":"Mozilla/5.0"
-}
+    try:
 
-try:
+        html = requests.get(url,headers=headers).text
 
-    resp = requests.get(url,headers=headers)
+        if "job" in html.lower():
 
-    data = resp.text
+            revisados += 1
 
-    if "title" in data:
+            if url not in memoria:
 
-        lineas = data.split("title")
+                memoria.append(url)
 
-        for linea in lineas:
+                nuevos += 1
 
-            if "min" in linea.lower():
-
-                titulo = linea.strip()
-
-                revisados += 1
-
-                if titulo not in memoria:
-
-                    memoria.append(titulo)
-
-                    nuevos += 1
-
-                    enviar(f"""
+                enviar(f"""
 
 EMPLEO MINERO DETECTADO
 
-{titulo}
+Empresa: {nombre}
 
-Fuente: Indeed
+Revisar en:
+
+{url}
 
 """)
 
-except:
+    except:
 
-    enviar("Error leyendo Indeed")
+        pass
 
-
-# GUARDAR MEMORIA
 
 with open(MEMORIA_FILE,"w") as f:
 
@@ -84,10 +88,10 @@ enviar(f"""
 
 RADAR FINALIZADO
 
-Revisados: {revisados}
+Fuentes revisadas: {revisados}
 
-Nuevos: {nuevos}
+Nuevos detectados: {nuevos}
 
-Memoria: {len(memoria)}
+Total memoria: {len(memoria)}
 
 """)
