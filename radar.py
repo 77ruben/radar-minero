@@ -1,322 +1,279 @@
 import requests
 from bs4 import BeautifulSoup
 import os
-import json
-import time
+import sys
+import traceback
 
-print("RADAR MINERO V18 PRO — NIVEL RECLUTADOR")
+print("RADAR MINERO V19 HEADHUNTER — NIVEL PROFESIONAL")
+
+# ==========================
+# TELEGRAM
+# ==========================
 
 TOKEN = os.environ["TOKEN"]
 CHAT_ID = os.environ["CHAT_ID"]
 
-MEMORIA="memoria.json"
-
-# =====================
-# TELEGRAM
-# =====================
-
-def telegram(msg):
-
-    requests.post(
-        f"https://api.telegram.org/bot{TOKEN}/sendMessage",
-        data={"chat_id":CHAT_ID,"text":msg}
-    )
-
-
-# =====================
-# MEMORIA
-# =====================
-
-def cargar():
+def enviar(msg):
 
     try:
-        with open(MEMORIA,"r") as f:
-            return json.load(f)
+
+        requests.post(
+
+            f"https://api.telegram.org/bot{TOKEN}/sendMessage",
+
+            data={"chat_id": CHAT_ID, "text": msg}
+
+        )
+
     except:
-        return []
 
-def guardar(m):
+        print("Error enviando Telegram")
 
-    with open(MEMORIA,"w") as f:
-        json.dump(m,f)
 
-memoria=cargar()
+# ==========================
+# FILTRO INTELIGENTE
+# ==========================
 
-# =====================
-# IA FILTRO TU PERFIL
-# =====================
+PALABRAS_CLAVE = [
 
-KEYWORDS=[
+    "supervisor",
+    "jefe",
+    "lider",
+    "líder",
 
-"administrador de contratos",
-"supervisor",
-"confiabilidad",
-"mantenimiento",
-"mantencion",
-"planner",
-"planificador"
+    "administrador",
+    "contrato",
+    "contratos",
 
-]
+    "operaciones",
 
-TURNOS=["7x7","14x14","10x10","4x3"]
+    "mantencion",
+    "mantenimiento",
 
-UBICACION=[
+    "planificador",
 
-"chile",
-"antofagasta",
-"calama",
-"copiapo",
-"iquique",
-"faena"
+    "ingeniero",
 
 ]
 
+TURNOS = [
 
-def score(texto):
+    "7x7",
+    "10x10",
+    "14x14",
+    "4x3",
 
-    s=0
+]
 
-    texto=texto.lower()
+EXCLUIR = [
 
-    for k in KEYWORDS:
+    "alumno",
+    "practica",
+    "práctica",
+    "trainee",
+    "aprendiz",
 
-        if k in texto:
-
-            s+=20
-
-    return s
-
-
-def prioridad(s):
-
-    if s>=60:
-        return "🚨 PRIORIDAD MAXIMA"
-
-    if s>=40:
-        return "🟡 PRIORIDAD ALTA"
-
-    if s>=20:
-        return "🟢 PRIORIDAD MEDIA"
-
-    return "🔎 DETECTADO"
+]
 
 
-def turno(texto):
+def cumple_filtro(texto):
 
-    texto=texto.lower()
+    texto = texto.lower()
 
-    for t in TURNOS:
+    if any(x in texto for x in EXCLUIR):
 
-        if t in texto:
+        return False
 
-            return t
+    if any(x in texto for x in PALABRAS_CLAVE):
 
-    return "No indica"
+        return True
 
+    if any(x in texto for x in TURNOS):
 
-def es_chile(texto):
+        return True
 
-    texto=texto.lower()
-
-    return any(u in texto for u in UBICACION)
-
-
-# =====================
-# SCRAPER BHP REAL
-# =====================
-
-def bhp():
-
-    lista=[]
-
-    url="https://careers.bhp.com/search/?optionsFacetsDD_country=Chile"
-
-    r=requests.get(url)
-
-    soup=BeautifulSoup(r.text,"html.parser")
-
-    for a in soup.find_all("a"):
-
-        link=a.get("href","")
-
-        if "/job/" in link:
-
-            link="https://careers.bhp.com"+link
-
-            try:
-
-                p=requests.get(link)
-
-                texto=p.text
-
-            except:
-
-                texto=a.text
-
-            lista.append(("BHP",a.text.strip(),link,texto))
-
-            time.sleep(1)
-
-    return lista
+    return False
 
 
-# =====================
-# SCRAPER FINNING
-# =====================
+# ==========================
+# BUSQUEDA GENERICA
+# ==========================
 
-def finning():
+def buscar_generico(nombre, url):
 
-    print("Buscando en Finning...")
+    print("Buscando en", nombre)
 
-    empleos = []
-
-    url = "https://finning.csod.com/ux/ats/careersite/4/home?c=finning&lang=es-CL"
+    lista = []
 
     try:
 
         r = requests.get(url, timeout=20)
 
-        if r.status_code == 200:
+        soup = BeautifulSoup(r.text, "html.parser")
 
-            soup = BeautifulSoup(r.text, "html.parser")
+        links = soup.find_all("a")
 
-            for link in soup.find_all("a"):
+        for link in links:
 
-                titulo = link.get_text(strip=True)
+            titulo = link.get_text(strip=True)
 
-                href = link.get("href")
+            href = link.get("href")
 
-                if titulo and cumple_filtro(titulo):
+            if not titulo or not href:
 
-                    empleos.append({
-                        "titulo": titulo,
-                        "empresa": "Finning",
-                        "link": "https://finning.csod.com" + str(href)
-                    })
+                continue
+
+            texto = titulo + " " + nombre
+
+            if cumple_filtro(texto):
+
+                lista.append({
+
+                    "titulo": titulo,
+
+                    "empresa": nombre,
+
+                    "link": href
+
+                })
+
+                print("VALIDO:", titulo)
+
+            else:
+
+                print("DESCARTADO:", titulo)
+
 
     except:
 
-        print("Finning no disponible, se omite")
-
-    return empleos
-
-    lista=[]
-
-    url="https://finning.csod.com/ux/ats/careersite/"
-
-    r=requests.get(url)
-
-    soup=BeautifulSoup(r.text,"html.parser")
-
-    for a in soup.find_all("a"):
-
-        titulo=a.text.strip()
-
-        link=a.get("href","")
-
-        if "job" in link:
-
-            lista.append(("Finning",titulo,link,titulo))
+        print(nombre, "omitido por error")
 
     return lista
 
 
-# =====================
-# LABORUM
-# =====================
+# ==========================
+# EMPRESAS
+# ==========================
 
-def laborum():
+def bhp():
 
-    lista=[]
+    return buscar_generico(
 
-    url="https://www.laborum.cl/empleos-mineria.html"
+        "BHP",
 
-    r=requests.get(url)
+        "https://jobs.bhp.com/search/"
 
-    soup=BeautifulSoup(r.text,"html.parser")
-
-    for a in soup.find_all("a"):
-
-        titulo=a.text.strip()
-
-        link=a.get("href","")
-
-        if titulo!="":
-
-            lista.append(("Laborum",titulo,link,titulo))
-
-    return lista
+    )
 
 
-# =====================
-# EJECUCION
-# =====================
+def finning():
 
-telegram("RADAR V18 PRO INICIADO")
+    return buscar_generico(
 
-empleos=[]
+        "Finning",
 
-empleos+=bhp()
-empleos+=finning()
-empleos+=laborum()
+        "https://finning.csod.com/ux/ats/careersite/4/home?c=finning&lang=es-CL"
 
-revisados=0
-validos=0
-
-for empresa,titulo,link,texto in empleos:
-
-    revisados+=1
-
-    if link in memoria:
-        continue
-
-    if not es_chile(texto):
-        continue
-
-    s=score(titulo+" "+texto)
-
-    nivel=prioridad(s)
-
-    t=turno(texto)
-
-    msg=f"""
-
-{nivel}
-
-Empresa: {empresa}
-
-Cargo:
-{titulo}
-
-Turno: {t}
-
-Score:{s}
-
-Link:
-{link}
-
-IA Baronin:
-Alta compatibilidad detectada
-
-"""
-
-    telegram(msg)
-
-    memoria.append(link)
-
-    validos+=1
+    )
 
 
-guardar(memoria)
+def komatsu():
 
-telegram(f"""
+    return buscar_generico(
 
-RADAR FINALIZADO
+        "Komatsu",
 
-Revisados:{revisados}
+        "https://komatsu.jobs/jobs"
 
-Validos:{validos}
+    )
 
-Memoria:{len(memoria)}
 
-""")
+def collahuasi():
+
+    return buscar_generico(
+
+        "Collahuasi",
+
+        "https://www.collahuasi.cl/personas/trabaja-con-nosotros/"
+
+    )
+
+
+def codelco():
+
+    return buscar_generico(
+
+        "Codelco",
+
+        "https://empleos.codelco.cl/"
+
+    )
+
+
+def amsa():
+
+    return buscar_generico(
+
+        "Antofagasta Minerals",
+
+        "https://www.aminerals.cl/empleo/"
+
+    )
+
+
+def anglo():
+
+    return buscar_generico(
+
+        "Anglo American",
+
+        "https://jobs.angloamerican.com/"
+
+    )
+
+
+# ==========================
+# INICIO
+# ==========================
+
+enviar("RADAR V19 HEADHUNTER INICIADO")
+
+empleos = []
+
+try:
+
+    empleos += bhp()
+    empleos += finning()
+    empleos += komatsu()
+    empleos += collahuasi()
+    empleos += codelco()
+    empleos += amsa()
+    empleos += anglo()
+
+except:
+
+    print("Error general")
+
+print("TOTAL:", len(empleos))
+
+
+# ==========================
+# RESULTADOS
+# ==========================
+
+if empleos:
+
+    mensaje = "EMPLEOS ENCONTRADOS\n\n"
+
+    for e in empleos[:10]:
+
+        mensaje += f"{e['titulo']}\n{e['empresa']}\n{e['link']}\n\n"
+
+    enviar(mensaje)
+
+else:
+
+    enviar("Sin empleos validos en esta ejecución")
+
+
+enviar("RADAR V19 FINALIZADO")
