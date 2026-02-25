@@ -6,6 +6,11 @@ import re
 
 print("RADAR MINERO V17 ULTRA — COBERTURA TOTAL CHILE")
 
+requests.post(
+    f"https://api.telegram.org/bot{TOKEN}/sendMessage",
+    data={"chat_id": CHAT_ID, "text": "PRUEBA TELEGRAM OK"}
+)
+
 TOKEN=os.environ["TOKEN"]
 CHAT_ID=os.environ["CHAT_ID"]
 
