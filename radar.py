@@ -166,6 +166,40 @@ def bhp():
 
 def finning():
 
+    print("Buscando en Finning...")
+
+    empleos = []
+
+    url = "https://finning.csod.com/ux/ats/careersite/4/home?c=finning&lang=es-CL"
+
+    try:
+
+        r = requests.get(url, timeout=20)
+
+        if r.status_code == 200:
+
+            soup = BeautifulSoup(r.text, "html.parser")
+
+            for link in soup.find_all("a"):
+
+                titulo = link.get_text(strip=True)
+
+                href = link.get("href")
+
+                if titulo and cumple_filtro(titulo):
+
+                    empleos.append({
+                        "titulo": titulo,
+                        "empresa": "Finning",
+                        "link": "https://finning.csod.com" + str(href)
+                    })
+
+    except:
+
+        print("Finning no disponible, se omite")
+
+    return empleos
+
     lista=[]
 
     url="https://finning.csod.com/ux/ats/careersite/"
