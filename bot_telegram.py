@@ -25,7 +25,7 @@ def guardar_json(file, data):
 
 
 offset_data = cargar_json(OFFSET_FILE, {"offset": 0})
-offset = offset_data["offset"]
+offset = offset_data.get("offset", 0)
 
 memoria = cargar_json(MEMORIA_FILE, {
     "rechazados": [],
