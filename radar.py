@@ -6,148 +6,70 @@ import json
 TOKEN = os.environ["TOKEN"]
 CHAT_ID = os.environ["CHAT_ID"]
 
-ARCHIVO_MEMORIA = "memoria.json"
-
-# CARGAR MEMORIA
+MEMORIA = "memoria.json"
 
 try:
-    with open(ARCHIVO_MEMORIA,"r") as f:
+    with open(MEMORIA,"r") as f:
         memoria = json.load(f)
 except:
     memoria = []
 
-# FILTROS
-
-CARGOS = [
-"supervisor",
-"mantencion",
-"mantenimiento",
-"planificador",
-"confiabilidad",
-"contrato"
-]
-
-MINERAS = [
-"minera",
-"mining",
-"faena",
-"codelco",
-"bhp",
-"collahuasi",
-"kinross",
-"antofagasta minerals",
-"teck"
-]
-
-EXCLUIR = [
-"sueldo",
-"salario",
-"blog"
-]
-
-URLS = [
-
-"https://www.chiletrabajos.cl/trabajo/minera",
-"https://cl.indeed.com/jobs?q=minera",
-"https://www.laborum.cl"
-
-]
+URL = "https://www.laborum.cl/empleos-busqueda-mineria.html"
 
 def enviar(msg):
 
-    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+    requests.post(
 
-    requests.post(url,data={
-    "chat_id":CHAT_ID,
-    "text":msg
-})
+        f"https://api.telegram.org/bot{TOKEN}/sendMessage",
 
-def analizar(texto):
+        data={"chat_id":CHAT_ID,"text":msg}
 
-    texto = texto.lower()
+    )
 
-    if any(e in texto for e in EXCLUIR):
-        return False,"Basura"
+enviar("RADAR MINERO LABORUM INICIADO")
 
-    if not any(c in texto for c in CARGOS):
-        return False,"No es cargo objetivo"
+html = requests.get(URL).text
 
-    if not any(m in texto for m in MINERAS):
-        return False,"No es minería"
+soup = BeautifulSoup(html,"html.parser")
 
-    return True,"Empleo Minero Real"
+empleos = soup.find_all("a")
 
-
-enviar("RADAR V7 PRO IA INICIADO")
-
-total = 0
 nuevos = 0
-repetidos = 0
 
-for url in URLS:
+for e in empleos:
 
-    html = requests.get(url).text
+    titulo = e.get_text().strip()
 
-    soup = BeautifulSoup(html,"html.parser")
+    if "min" in titulo.lower():
 
-    links = soup.find_all("a")
+        if titulo not in memoria and len(titulo) > 15:
 
-    for link in links:
+            memoria.append(titulo)
 
-        texto = link.get_text().strip()
+            nuevos += 1
 
-        if texto == "":
-            continue
+            enviar(f"""
 
-        total += 1
+EMPLEO MINERO DETECTADO
 
-        valido,razon = analizar(texto)
+{titulo}
 
-        if valido:
-
-            if texto in memoria:
-
-                repetidos += 1
-
-            else:
-
-                nuevos += 1
-
-                memoria.append(texto)
-
-                enviar(f"""
-
-NUEVO EMPLEO MINERO DETECTADO
-
-Cargo:
-{texto}
-
-Fuente:
-{url}
-
-Analisis IA:
-{razon}
+Fuente: Laborum
 
 """)
 
 
-# GUARDAR MEMORIA
-
-with open(ARCHIVO_MEMORIA,"w") as f:
+with open(MEMORIA,"w") as f:
 
     json.dump(memoria,f)
 
 
 enviar(f"""
 
-RADAR V7 PRO FINALIZADO
-
-Revisados: {total}
+RADAR FINALIZADO
 
 Nuevos: {nuevos}
 
-Repetidos: {repetidos}
-
-Memoria IA: {len(memoria)} empleos almacenados
+Memoria total: {len(memoria)}
 
 """)
