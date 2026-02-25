@@ -108,7 +108,7 @@ def prioridad(s):
     if s>=25:
         return "🟢 PRIORIDAD MEDIA"
 
-    return None
+    return "🔎 DETECTADO"
 
 
 def enviar(msg):
