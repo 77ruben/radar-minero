@@ -1,223 +1,119 @@
 import requests
 from bs4 import BeautifulSoup
 import os
-import json
-
-print("INICIO RADAR MINERO V6.1")
 
 TOKEN = os.environ["TOKEN"]
 CHAT_ID = os.environ["CHAT_ID"]
 
-MEMORIA_FILE = "memoria.json"
-SEEN_FILE = "seen_jobs.json"
-
-
-# ----------------
-# JSON
-# ----------------
-
-def cargar_json(file, default):
-
-    try:
-        with open(file, encoding="utf-8") as f:
-            return json.load(f)
-    except:
-        return default
-
-
-def guardar_json(file, data):
-
-    with open(file, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
-
-
-memoria = cargar_json(MEMORIA_FILE, {})
-
-vistos = cargar_json(SEEN_FILE, [])
-
-turnos = memoria.get(
-    "turnos_buenos",
-    ["7x7", "10x10", "14x14", "4x3"]
-)
-
-rechazados = memoria.get("rechazados", [])
-
-
-# ----------------
-# FILTROS
-# ----------------
-
-KEYWORDS = [
-
+CARGOS = [
 "supervisor",
-
-"operaciones",
-
-"administrador",
-
-"contrato",
-
-"jefe",
-
 "mantencion",
-
 "mantenimiento",
-
-"mineria",
-
-"mina"
-
+"planificador",
+"confiabilidad",
+"administrador de contrato"
 ]
 
+MINERIA = [
+"minera",
+"faena",
+"minero",
+"contrato minero"
+]
 
-# ----------------
-# PORTALES QUE FUNCIONAN REALMENTE
-# ----------------
+EXCLUIR = [
+"sueldo",
+"salario",
+"blog",
+"noticia"
+]
 
 URLS = [
 
-"https://www.chiletrabajos.cl/buscar?q=mineria",
-
-"https://www.chiletrabajos.cl/buscar?q=supervisor+mineria",
-
-"https://www.chiletrabajos.cl/buscar?q=administrador+contrato+mineria"
+"https://www.chiletrabajos.cl/trabajo/minera",
+"https://cl.indeed.com/jobs?q=minera",
+"https://www.bne.cl/ofertas"
 
 ]
 
+def enviar(msg):
 
-# ----------------
-# TURNO
-# ----------------
+    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
 
-def detectar_turno(texto):
+    requests.post(url,data={
+    "chat_id":CHAT_ID,
+    "text":msg
+})
+
+
+def analizar(texto):
 
     texto = texto.lower()
 
-    for t in turnos:
+    if any(e in texto for e in EXCLUIR):
+        return "DESCARTADO: basura"
 
-        if t in texto:
+    if not any(c in texto for c in CARGOS):
+        return "DESCARTADO: no es cargo objetivo"
 
-            return t
+    if not any(m in texto for m in MINERIA):
+        return "DESCARTADO: no es mineria"
 
-    return "No especificado"
-
-
-# ----------------
-# VALIDAR
-# ----------------
-
-def cumple(titulo):
-
-    t = titulo.lower()
-
-    if any(r in t for r in rechazados):
-
-        return False
-
-    if any(k in t for k in KEYWORDS):
-
-        return True
-
-    return False
+    return "VALIDO"
 
 
-# ----------------
-# TELEGRAM
-# ----------------
+total = 0
+validos = 0
+descartados = 0
 
-def enviar(msg):
+enviar("RADAR MINERO V6 INICIADO")
 
-    requests.get(
-
-        f"https://api.telegram.org/bot{TOKEN}/sendMessage",
-
-        params={
-
-            "chat_id": CHAT_ID,
-
-            "text": msg
-
-        }
-
-    )
-
-
-# ----------------
-# SCRAPER REAL
-# ----------------
-
-nuevos = 0
 
 for url in URLS:
 
-    print("Revisando", url)
+    html = requests.get(url).text
 
-    try:
+    soup = BeautifulSoup(html,"html.parser")
 
-        html = requests.get(url, timeout=20).text
+    links = soup.find_all("a")
 
-        soup = BeautifulSoup(html, "html.parser")
+    for link in links:
 
-        trabajos = soup.select("a")
+        texto = link.get_text().strip()
 
-        for job in trabajos:
+        if texto == "":
+            continue
 
-            titulo = job.get_text().strip()
+        total += 1
 
-            link = job.get("href")
+        resultado = analizar(texto)
 
-            if not titulo:
+        if resultado == "VALIDO":
 
-                continue
+            validos += 1
 
-            if not link:
+            enviar(
+f"""⛏ EMPLEO DETECTADO
 
-                continue
+{texto}
 
+{link.get('href')}
+"""
+)
 
-            if cumple(titulo):
+        else:
 
-                if titulo not in vistos:
-
-
-                    turno = detectar_turno(titulo)
-
-
-                    mensaje = (
-
-f"⛏️ {titulo}\n"
-f"🕒 Turno: {turno}\n"
-f"https://www.chiletrabajos.cl{link}"
-
-                    )
+            descartados += 1
 
 
-                    enviar(mensaje)
+enviar(f"""
 
-                    vistos.append(titulo)
+RADAR FINALIZADO
 
-                    nuevos += 1
+Revisados: {total}
 
+Validos: {validos}
 
-    except Exception as e:
+Descartados: {descartados}
 
-        print("ERROR:", e)
-
-
-guardar_json(SEEN_FILE, vistos)
-
-
-# ----------------
-# FINAL
-# ----------------
-
-if nuevos == 0:
-
-    enviar("Radar activo sin novedades")
-
-else:
-
-    enviar(f"Radar detectó {nuevos} empleos nuevos")
-
-
-print("FIN")
+""")
