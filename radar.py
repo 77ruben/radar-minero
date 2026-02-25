@@ -155,4 +155,110 @@ def bhp():
 
     url = "https://careers.bhp.com/search/?createNewAlert=false&q=Chile&optionsFacetsDD_country=Chile"
 
-    r =
+    r = requests.get(url)
+
+    soup = BeautifulSoup(r.text,"html.parser")
+
+    trabajos = soup.find_all("a")
+
+    encontrados = []
+
+    for t in trabajos:
+
+        titulo = t.text.strip()
+
+        link = t.get("href","")
+
+        if "/job/" in link:
+
+            link = "https://careers.bhp.com"+link
+
+            encontrados.append({
+
+                "empresa":"BHP",
+                "titulo":titulo,
+                "link":link
+
+            })
+
+    return encontrados
+
+
+# ==========================
+# PROCESAR EMPLEOS
+# ==========================
+
+revisados=0
+validos=0
+
+empleos = bhp()
+
+for e in empleos:
+
+    revisados+=1
+
+    titulo=e["titulo"]
+    link=e["link"]
+    empresa=e["empresa"]
+
+    if link in memoria:
+        continue
+
+    if not es_chile(titulo):
+        continue
+
+    score=calcular_score(titulo)
+
+    nivel=prioridad(score)
+
+    if nivel=="DESCARTADO":
+        continue
+
+    turno=detectar_turno(titulo)
+
+    mensaje=f"""
+
+{nivel}
+
+Empresa: {empresa}
+
+Cargo:
+{titulo}
+
+Turno: {turno}
+
+Score IA: {score}%
+
+Link:
+{link}
+
+IA Baronin:
+Alta compatibilidad con tu perfil profesional.
+
+"""
+
+    enviar(mensaje)
+
+    memoria.append(link)
+
+    validos+=1
+
+
+guardar_memoria(memoria)
+
+
+# ==========================
+# FINAL
+# ==========================
+
+enviar(f"""
+
+RADAR FINALIZADO
+
+Revisados:{revisados}
+
+Validos:{validos}
+
+Memoria:{len(memoria)}
+
+""")
