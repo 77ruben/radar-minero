@@ -36,3 +36,9 @@ jobs:
           git add seen_jobs.json
           git commit -m "Update seen jobs" || exit 0
           git push
+
+          - name: Guardar memoria
+  uses: actions/upload-artifact@v4
+  with:
+    name: memoria
+    path: memoria.json
