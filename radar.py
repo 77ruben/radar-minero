@@ -2,58 +2,134 @@ import requests
 from bs4 import BeautifulSoup
 import os
 import json
+import re
+
+print("RADAR MINERO V16 — PRIORIDAD MAXIMA ACTIVADA")
 
 TOKEN = os.environ["TOKEN"]
 CHAT_ID = os.environ["CHAT_ID"]
 
-print("RADAR MINERO V15 ULTRA INICIADO")
+MEMORIA = "memoria.json"
 
 # ==========================
-# CONFIG PERFIL RUBEN
+# MEMORIA ANTI DUPLICADOS
 # ==========================
 
-CARGOS_PRIORIDAD = [
+def cargar_memoria():
+    try:
+        with open(MEMORIA,"r") as f:
+            return json.load(f)
+    except:
+        return []
 
-"supervisor",
+def guardar_memoria(mem):
+    with open(MEMORIA,"w") as f:
+        json.dump(mem,f)
+
+memoria = cargar_memoria()
+
+# ==========================
+# PRIORIDAD MAXIMA TU PERFIL
+# ==========================
+
+PRIORIDAD_MAXIMA = [
+
 "administrador de contratos",
-"contract administrator",
+"supervisor",
+"supervisor mantencion",
+"supervisor mantenimiento",
+"supervisor operaciones",
+"supervisor confiabilidad",
 "ingeniero confiabilidad",
-"reliability",
-"planificador",
-"planner",
-"jefe mantenimiento"
+"ingeniero mantenimiento",
+"ingeniero planificacion",
+"planner mantenimiento"
 
 ]
 
-TURNOS = [
+# ==========================
+# UBICACIONES CHILE
+# ==========================
 
-"14x14",
-"10x10",
-"7x7",
-"4x3"
-
-]
-
-UBICACION = [
+UBICACION_CHILE = [
 
 "chile",
 "antofagasta",
 "calama",
 "copiapo",
+"iquique",
 "faena",
-"minera"
+"escondida",
+"spence",
+"collahuasi",
+"los pelambres",
+"centinela"
 
 ]
 
 # ==========================
-# MEMORIA
+# TURNOS
 # ==========================
 
-try:
-    with open("memoria.json","r") as f:
-        memoria=json.load(f)
-except:
-    memoria=[]
+TURNOS = [
+
+"7x7",
+"14x14",
+"10x10",
+"4x3"
+
+]
+
+# ==========================
+# FUNCIONES IA BARONIN
+# ==========================
+
+def es_chile(texto):
+
+    texto = texto.lower()
+
+    return any(u in texto for u in UBICACION_CHILE)
+
+
+def detectar_turno(texto):
+
+    texto = texto.lower()
+
+    for t in TURNOS:
+
+        if t in texto:
+            return t
+
+    return "No indica"
+
+
+def calcular_score(titulo):
+
+    titulo = titulo.lower()
+
+    score = 0
+
+    for p in PRIORIDAD_MAXIMA:
+
+        if p in titulo:
+            score += 25
+
+    return score
+
+
+def prioridad(score):
+
+    if score >= 75:
+        return "🚨 PRIORIDAD MAXIMA — POSTULAR URGENTE"
+
+    if score >= 50:
+        return "🟡 PRIORIDAD ALTA"
+
+    if score >= 25:
+        return "🟢 PRIORIDAD MEDIA"
+
+    return "DESCARTADO"
+
 
 # ==========================
 # TELEGRAM
@@ -61,181 +137,22 @@ except:
 
 def enviar(msg):
 
-    requests.get(
+    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
 
-        f"https://api.telegram.org/bot{TOKEN}/sendMessage",
-        params={"chat_id":CHAT_ID,"text":msg}
+    requests.post(url,data={
 
-    )
+        "chat_id":CHAT_ID,
+        "text":msg
 
-# ==========================
-# LEER DESCRIPCION
-# ==========================
+    })
 
-def leer_descripcion(link):
-
-    try:
-
-        html=requests.get(link,timeout=10).text
-
-        return html.lower()
-
-    except:
-
-        return ""
 
 # ==========================
-# IA REAL
-# ==========================
-
-def filtro_ia(titulo,link):
-
-    texto = titulo.lower()
-
-    if not any(c in texto for c in CARGOS_PRIORIDAD):
-        return False,"Cargo no coincide"
-
-    descripcion = leer_descripcion(link)
-
-    texto_total = texto + descripcion
-
-    if not any(u in texto_total for u in UBICACION):
-        return False,"No Chile"
-
-    turno_detectado="No indica"
-
-    for t in TURNOS:
-
-        if t in texto_total:
-            turno_detectado=t
-
-    return True,f"OK Turno:{turno_detectado}"
-
-# ==========================
-# BHP
+# SCRAPER BHP CHILE
 # ==========================
 
 def bhp():
 
-    lista=[]
+    url = "https://careers.bhp.com/search/?createNewAlert=false&q=Chile&optionsFacetsDD_country=Chile"
 
-    url="https://careers.bhp.com/search/?locationsearch=Chile"
-
-    soup=BeautifulSoup(requests.get(url).text,"html.parser")
-
-    for a in soup.find_all("a"):
-
-        link=a.get("href","")
-
-        if "/job/" in link:
-
-            lista.append({
-
-                "empresa":"BHP",
-                "titulo":a.text.strip(),
-                "link":"https://careers.bhp.com"+link
-
-            })
-
-    return lista
-
-
-# ==========================
-# KOMATSU
-# ==========================
-
-def komatsu():
-
-    lista=[]
-
-    url="https://komatsu.jobs/search/?location=Chile"
-
-    soup=BeautifulSoup(requests.get(url).text,"html.parser")
-
-    for a in soup.find_all("a"):
-
-        link=a.get("href","")
-
-        if "/job/" in link:
-
-            lista.append({
-
-                "empresa":"Komatsu",
-                "titulo":a.text.strip(),
-                "link":link
-
-            })
-
-    return lista
-
-
-# ==========================
-# EJECUCION
-# ==========================
-
-fuentes=[bhp,komatsu]
-
-todos=[]
-
-for f in fuentes:
-
-    try:
-        todos.extend(f())
-    except:
-        print("error fuente")
-
-revisados=0
-validos=0
-
-for job in todos:
-
-    revisados+=1
-
-    ok,info=filtro_ia(job["titulo"],job["link"])
-
-    if not ok:
-        continue
-
-    if job["link"] in memoria:
-        continue
-
-    memoria.append(job["link"])
-
-    validos+=1
-
-    enviar(f"""
-
-NUEVO EMPLEO MINERO PREMIUM
-
-Empresa: {job['empresa']}
-
-Cargo:
-{job['titulo']}
-
-Link:
-{job['link']}
-
-IA:
-{info}
-
-""")
-
-# ==========================
-
-with open("memoria.json","w") as f:
-
-    json.dump(memoria,f)
-
-# ==========================
-
-enviar(f"""
-
-RADAR FINALIZADO
-
-Revisados:{revisados}
-
-Validos:{validos}
-
-Memoria:{len(memoria)}
-
-""")
+    r =
