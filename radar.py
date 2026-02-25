@@ -2,53 +2,63 @@ import requests
 from bs4 import BeautifulSoup
 import os
 import json
-import re
+import time
 
-print("RADAR MINERO V17 ULTRA — COBERTURA TOTAL CHILE")
+print("RADAR MINERO V18 PRO — NIVEL RECLUTADOR")
 
-TOKEN=os.environ["TOKEN"]
-CHAT_ID=os.environ["CHAT_ID"]
+TOKEN = os.environ["TOKEN"]
+CHAT_ID = os.environ["CHAT_ID"]
 
 MEMORIA="memoria.json"
 
-requests.post(
-    f"https://api.telegram.org/bot{TOKEN}/sendMessage",
-    data={"chat_id": CHAT_ID, "text": "PRUEBA TELEGRAM OK"}
-)
+# =====================
+# TELEGRAM
+# =====================
+
+def telegram(msg):
+
+    requests.post(
+        f"https://api.telegram.org/bot{TOKEN}/sendMessage",
+        data={"chat_id":CHAT_ID,"text":msg}
+    )
+
 
 # =====================
 # MEMORIA
 # =====================
 
-def cargar_memoria():
+def cargar():
+
     try:
         with open(MEMORIA,"r") as f:
             return json.load(f)
     except:
         return []
 
-def guardar_memoria(m):
+def guardar(m):
+
     with open(MEMORIA,"w") as f:
         json.dump(m,f)
 
-memoria=cargar_memoria()
+memoria=cargar()
 
 # =====================
-# CONFIG IA BARONIN
+# IA FILTRO TU PERFIL
 # =====================
 
 KEYWORDS=[
 
 "administrador de contratos",
 "supervisor",
-"supervisor mantencion",
-"supervisor mantenimiento",
-"ingeniero confiabilidad",
-"ingeniero mantenimiento",
+"confiabilidad",
+"mantenimiento",
+"mantencion",
 "planner",
 "planificador"
 
 ]
+
+TURNOS=["7x7","14x14","10x10","4x3"]
 
 UBICACION=[
 
@@ -61,20 +71,37 @@ UBICACION=[
 
 ]
 
-TURNOS=["7x7","14x14","10x10","4x3"]
 
-# =====================
-# IA FUNCIONES
-# =====================
+def score(texto):
 
-def es_chile(texto):
+    s=0
 
     texto=texto.lower()
 
-    return any(u in texto for u in UBICACION)
+    for k in KEYWORDS:
+
+        if k in texto:
+
+            s+=20
+
+    return s
 
 
-def detectar_turno(texto):
+def prioridad(s):
+
+    if s>=60:
+        return "🚨 PRIORIDAD MAXIMA"
+
+    if s>=40:
+        return "🟡 PRIORIDAD ALTA"
+
+    if s>=20:
+        return "🟢 PRIORIDAD MEDIA"
+
+    return "🔎 DETECTADO"
+
+
+def turno(texto):
 
     texto=texto.lower()
 
@@ -87,43 +114,15 @@ def detectar_turno(texto):
     return "No indica"
 
 
-def score(titulo):
+def es_chile(texto):
 
-    titulo=titulo.lower()
+    texto=texto.lower()
 
-    s=0
+    return any(u in texto for u in UBICACION)
 
-    for k in KEYWORDS:
-
-        if k in titulo:
-
-            s+=25
-
-    return s
-
-
-def prioridad(s):
-
-    if s>=75:
-        return "🚨 PRIORIDAD MAXIMA"
-
-    if s>=50:
-        return "🟡 PRIORIDAD ALTA"
-
-    if s>=25:
-        return "🟢 PRIORIDAD MEDIA"
-
-    return "🔎 DETECTADO"
-
-
-def enviar(msg):
-
-    url=f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-
-    requests.post(url,data={"chat_id":CHAT_ID,"text":msg})
 
 # =====================
-# SCRAPERS
+# SCRAPER BHP REAL
 # =====================
 
 def bhp():
@@ -144,35 +143,27 @@ def bhp():
 
             link="https://careers.bhp.com"+link
 
-            titulo=a.text.strip()
-
             try:
 
                 p=requests.get(link)
 
-                texto=p.text.lower()
+                texto=p.text
 
             except:
 
-                texto=titulo
+                texto=a.text
 
-            lista.append(("BHP",titulo,link,texto))
+            lista.append(("BHP",a.text.strip(),link,texto))
+
+            time.sleep(1)
 
     return lista
 
 
-def laborum():
+# =====================
+# SCRAPER FINNING
+# =====================
+
+def finning():
 
     lista=[]
-
-    url="https://www.laborum.cl/empleos-mineria.html"
-
-    r=requests.get(url)
-
-    soup=BeautifulSoup(r.text,"html.parser")
-
-    for a in soup.find_all("a"):
-
-        link=a.get("href","")
-
-        titulo=a.text.strip
