@@ -2,192 +2,302 @@ import requests
 from bs4 import BeautifulSoup
 import os
 import json
+import re
 
 TOKEN = os.environ["TOKEN"]
 CHAT_ID = os.environ["CHAT_ID"]
 
-MEMORIA_FILE = "memoria.json"
+print("RADAR MINERO V14 PRO CHILE INICIADO")
 
-# ---------- MEMORIA ----------
+# ==========================
+# FILTROS PROFESIONALES
+# ==========================
+
+CARGOS = [
+
+"supervisor",
+"administrador de contratos",
+"contract administrator",
+"jefe",
+"planner",
+"planificador",
+"mantencion",
+"mantenimiento",
+"maintenance",
+"confiabilidad",
+"reliability",
+"ingeniero mantenimiento"
+
+]
+
+TURNOS = [
+
+"14x14",
+"10x10",
+"7x7",
+"4x3",
+"turno"
+
+]
+
+UBICACION_CHILE = [
+
+"chile",
+"antofagasta",
+"calama",
+"copiapo",
+"iquique",
+"faena",
+"minera",
+"collahuasi",
+"escondida",
+"spence",
+"los bronces",
+"codelco",
+"chuquicamata"
+
+]
+
+PALABRAS_EXTRANJERO = [
+
+"peru",
+"australia",
+"canada",
+"usa",
+"mexico",
+"argentina",
+"wy",
+"tn",
+"nsw",
+"queensland"
+
+]
+
+# ==========================
+# MEMORIA
+# ==========================
+
+ARCHIVO = "memoria.json"
+
 try:
-    with open(MEMORIA_FILE,"r") as f:
+    with open(ARCHIVO,"r") as f:
         memoria = json.load(f)
 except:
     memoria = []
 
-# ---------- FILTRO RUBEN ----------
-CARGOS_OBJETIVO = [
-"supervisor",
-"maintenance supervisor",
-"supervisor mantencion",
-"jefe mantencion",
-"planificador",
-"planner",
-"administrador de contrato",
-"contract administrator",
-"contract manager"
-]
+# ==========================
+# IA ANALISIS
+# ==========================
 
-PALABRAS_MINERIA = [
-"mining",
-"minera",
-"faena",
-"mine"
-]
-
-# ---------- FUENTES REALES ----------
-FUENTES = {
-
-"Codelco":
-"https://jobs.codelco.cl/search/?q=",
-
-"BHP":
-"https://careers.bhp.com/search/?q=",
-
-"Antofagasta Minerals":
-"https://careers.antofagasta.co.uk/search/?q=",
-
-"Collahuasi":
-"https://www.collahuasi.cl/trabaja-con-nosotros/",
-
-"Kinross":
-"https://jobs.kinross.com/search/?q=",
-
-"Komatsu":
-"https://komatsu.jobs/search-jobs?acm=ALL",
-
-"Finning":
-"https://finning.taleo.net/careersection/finning_external/jobsearch.ftl",
-
-"Liebherr":
-"https://www.liebherr.com/en/cll/career/job-vacancies/job-vacancies.html",
-
-"Sandvik":
-"https://jobs.smartrecruiters.com/Sandvik",
-
-"Epiroc":
-"https://epiroc.com/en-us/jobs",
-
-"Indeed":
-"https://cl.indeed.com/jobs?q=minera",
-
-"LinkedIn":
-"https://www.linkedin.com/jobs/search/?keywords=mining"
-
-}
-
-# ---------- TELEGRAM ----------
-def enviar(msg):
-
-    requests.post(
-
-        f"https://api.telegram.org/bot{TOKEN}/sendMessage",
-
-        data={"chat_id":CHAT_ID,"text":msg}
-
-    )
-
-# ---------- ANALISIS IA ----------
-def analizar(texto):
+def analisis_ia(texto):
 
     t = texto.lower()
 
-    if any(c in t for c in CARGOS_OBJETIVO):
+    if any(p in t for p in PALABRAS_EXTRANJERO):
+        return False, "Extranjero"
 
-        if any(m in t for m in PALABRAS_MINERIA):
+    if not any(p in t for p in UBICACION_CHILE):
+        return False, "No indica Chile"
 
-            return "VALIDO"
+    if any(c in t for c in CARGOS):
 
-        else:
+        if any(turno in t for turno in TURNOS):
+            return True, "Cargo + Turno OK"
 
-            return "DESCARTADO: No menciona minería"
+        return True, "Cargo OK"
 
-    return "DESCARTADO: No es cargo objetivo"
+    return False, "No cumple perfil"
 
-# ---------- INICIO ----------
-enviar("RADAR V13 COBERTURA TOTAL INICIADO")
 
-revisados = 0
-validos = 0
-descartados = 0
+# ==========================
+# TELEGRAM
+# ==========================
 
-headers = {"User-Agent":"Mozilla/5.0"}
+def enviar(msg):
 
-for empresa,url in FUENTES.items():
+    requests.get(
+
+        f"https://api.telegram.org/bot{TOKEN}/sendMessage",
+        params={"chat_id":CHAT_ID,"text":msg}
+
+    )
+
+# ==========================
+# BUSCAR TRABAJOS
+# ==========================
+
+def buscar_bhp():
+
+    lista = []
+
+    url = "https://careers.bhp.com/search/?q=&locationsearch=Chile"
+
+    html = requests.get(url).text
+
+    soup = BeautifulSoup(html,"html.parser")
+
+    for a in soup.find_all("a"):
+
+        titulo = a.text.strip()
+
+        link = a.get("href","")
+
+        if "/job/" in link:
+
+            lista.append({
+
+                "empresa":"BHP",
+                "titulo":titulo,
+                "link":"https://careers.bhp.com"+link
+
+            })
+
+    return lista
+
+
+def buscar_liebherr():
+
+    lista=[]
+
+    url="https://www.liebherr.com/en/cln/careers/job-vacancies/job-vacancies.html"
+
+    html=requests.get(url).text
+
+    soup=BeautifulSoup(html,"html.parser")
+
+    for a in soup.find_all("a"):
+
+        titulo=a.text.strip()
+
+        link=a.get("href","")
+
+        if "job" in link.lower():
+
+            lista.append({
+
+                "empresa":"Liebherr",
+                "titulo":titulo,
+                "link":link
+
+            })
+
+    return lista
+
+
+def buscar_komatsu():
+
+    lista=[]
+
+    url="https://komatsu.jobs/search/?location=Chile"
+
+    html=requests.get(url).text
+
+    soup=BeautifulSoup(html,"html.parser")
+
+    for a in soup.find_all("a"):
+
+        titulo=a.text.strip()
+
+        link=a.get("href","")
+
+        if "/job/" in link:
+
+            lista.append({
+
+                "empresa":"Komatsu",
+                "titulo":titulo,
+                "link":link
+
+            })
+
+    return lista
+
+
+# ==========================
+# EJECUCION
+# ==========================
+
+todos=[]
+
+for funcion in [
+
+buscar_bhp,
+buscar_liebherr,
+buscar_komatsu
+
+]:
 
     try:
 
-        html = requests.get(url,headers=headers,timeout=15).text
-
-        soup = BeautifulSoup(html,"html.parser")
-
-        links = soup.find_all("a")
-
-        for link in links:
-
-            titulo = link.get_text().strip()
-
-            href = link.get("href")
-
-            if titulo and href:
-
-                revisados += 1
-
-                resultado = analizar(titulo)
-
-                if resultado == "VALIDO":
-
-                    if titulo not in memoria:
-
-                        memoria.append(titulo)
-
-                        validos += 1
-
-                        if href.startswith("/"):
-
-                            href = url + href
-
-                        enviar(f"""
-
-NUEVO EMPLEO MINERO DETECTADO
-
-Empresa: {empresa}
-
-Cargo:
-{titulo}
-
-Link:
-{href}
-
-Analisis IA:
-Coincide con Supervisor / Administrador de Contratos
-
-""")
-
-                else:
-
-                    descartados += 1
+        todos.extend(funcion())
 
     except:
 
-        enviar(f"Error leyendo {empresa}")
+        print("Error fuente")
 
-# ---------- GUARDAR MEMORIA ----------
-with open(MEMORIA_FILE,"w") as f:
+# ==========================
 
+revisados=0
+validos=0
+
+for trabajo in todos:
+
+    revisados+=1
+
+    texto = trabajo["titulo"]
+
+    ok, razon = analisis_ia(texto)
+
+    if not ok:
+        continue
+
+    if trabajo["link"] in memoria:
+        continue
+
+    memoria.append(trabajo["link"])
+
+    validos+=1
+
+    enviar(
+
+f"""
+
+NUEVO EMPLEO MINERO CHILE
+
+Empresa: {trabajo["empresa"]}
+
+Cargo:
+{trabajo["titulo"]}
+
+Link:
+{trabajo["link"]}
+
+IA:
+{razon}
+
+"""
+
+)
+
+# ==========================
+
+with open(ARCHIVO,"w") as f:
     json.dump(memoria,f)
 
-# ---------- REPORTE FINAL ----------
-enviar(f"""
+# ==========================
+
+enviar(
+
+f"""
 
 RADAR FINALIZADO
 
-Revisados: {revisados}
+Revisados:{revisados}
 
-Validos: {validos}
+Validos:{validos}
 
-Descartados: {descartados}
+Memoria:{len(memoria)}
 
-Memoria total: {len(memoria)}
+"""
 
-""")
+)
