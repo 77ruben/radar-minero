@@ -2,9 +2,8 @@ import requests
 from bs4 import BeautifulSoup
 import os
 import json
-import re
 
-print("INICIO RADAR MINERO PRO")
+print("INICIO RADAR MINERO V6.1")
 
 TOKEN = os.environ["TOKEN"]
 CHAT_ID = os.environ["CHAT_ID"]
@@ -13,9 +12,9 @@ MEMORIA_FILE = "memoria.json"
 SEEN_FILE = "seen_jobs.json"
 
 
-# ------------------------
-# FUNCIONES JSON
-# ------------------------
+# ----------------
+# JSON
+# ----------------
 
 def cargar_json(file, default):
 
@@ -36,139 +35,101 @@ memoria = cargar_json(MEMORIA_FILE, {})
 
 vistos = cargar_json(SEEN_FILE, [])
 
-rechazados = memoria.get("rechazados", [])
-
-turnos_buenos = memoria.get(
+turnos = memoria.get(
     "turnos_buenos",
     ["7x7", "10x10", "14x14", "4x3"]
 )
 
+rechazados = memoria.get("rechazados", [])
 
-# ------------------------
-# FILTRO PROFESIONAL MINERO
-# ------------------------
+
+# ----------------
+# FILTROS
+# ----------------
 
 KEYWORDS = [
 
 "supervisor",
-"supervisor operaciones",
-"supervisor de operaciones",
 
-"administrador de contrato",
-"administrador de contratos",
+"operaciones",
+
+"administrador",
+
+"contrato",
 
 "jefe",
-"jefe mantenimiento",
-"jefe mantencion",
-"jefe operaciones",
 
 "mantencion",
+
 "mantenimiento",
 
-"planificador",
-"planificacion",
+"mineria",
 
-"confiabilidad",
-
-"ingeniero mantenimiento",
-"ingeniero mantencion",
-
-"mina",
-"mineria"
+"mina"
 
 ]
 
 
-# ------------------------
-# EMPRESAS OBJETIVO CHILE
-# ------------------------
+# ----------------
+# PORTALES QUE FUNCIONAN REALMENTE
+# ----------------
 
-EMPRESAS = [
+URLS = [
 
-"kinross",
-"candelaria",
-"bhp",
-"escondida",
-"collahuasi",
-"anglo american",
-"antofagasta minerals",
-"spence",
-"teck",
-"que brada blanca",
-"cerro negro norte",
-"cmp",
-"cap mineria",
-"lomas bayas",
-"zaldívar"
+"https://www.chiletrabajos.cl/buscar?q=mineria",
+
+"https://www.chiletrabajos.cl/buscar?q=supervisor+mineria",
+
+"https://www.chiletrabajos.cl/buscar?q=administrador+contrato+mineria"
 
 ]
 
 
-# ------------------------
-# PORTALES
-# ------------------------
-
-URLS = {
-
-"Trabajando":
-
-"https://www.trabajando.cl/trabajo-mineria",
-
-"Indeed":
-
-"https://cl.indeed.com/jobs?q=mineria",
-
-"Computrabajo":
-
-"https://www.computrabajo.cl/trabajo-de-mineria"
-
-}
-
-
-# ------------------------
-# DETECTAR TURNO
-# ------------------------
+# ----------------
+# TURNO
+# ----------------
 
 def detectar_turno(texto):
 
     texto = texto.lower()
 
-    for turno in turnos_buenos:
+    for t in turnos:
 
-        if turno in texto:
-            return turno
+        if t in texto:
+
+            return t
 
     return "No especificado"
 
 
-# ------------------------
-# VALIDAR EMPLEO
-# ------------------------
+# ----------------
+# VALIDAR
+# ----------------
 
 def cumple(titulo):
 
     t = titulo.lower()
 
     if any(r in t for r in rechazados):
+
         return False
 
     if any(k in t for k in KEYWORDS):
+
         return True
 
     return False
 
 
-# ------------------------
-# ENVIAR TELEGRAM
-# ------------------------
+# ----------------
+# TELEGRAM
+# ----------------
 
-def enviar_telegram(msg):
-
-    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+def enviar(msg):
 
     requests.get(
 
-        url,
+        f"https://api.telegram.org/bot{TOKEN}/sendMessage",
 
         params={
 
@@ -181,15 +142,15 @@ def enviar_telegram(msg):
     )
 
 
-# ------------------------
-# SCRAPER
-# ------------------------
+# ----------------
+# SCRAPER REAL
+# ----------------
 
 nuevos = 0
 
-for portal, url in URLS.items():
+for url in URLS:
 
-    print("Revisando:", portal)
+    print("Revisando", url)
 
     try:
 
@@ -197,16 +158,20 @@ for portal, url in URLS.items():
 
         soup = BeautifulSoup(html, "html.parser")
 
-        for a in soup.find_all("a"):
+        trabajos = soup.select("a")
 
-            titulo = a.get_text().strip()
+        for job in trabajos:
 
-            link = a.get("href")
+            titulo = job.get_text().strip()
+
+            link = job.get("href")
 
             if not titulo:
+
                 continue
 
             if not link:
+
                 continue
 
 
@@ -221,15 +186,13 @@ for portal, url in URLS.items():
                     mensaje = (
 
 f"⛏️ {titulo}\n"
-f"🏢 Portal: {portal}\n"
 f"🕒 Turno: {turno}\n"
-f"{link}"
+f"https://www.chiletrabajos.cl{link}"
 
                     )
 
 
-                    enviar_telegram(mensaje)
-
+                    enviar(mensaje)
 
                     vistos.append(titulo)
 
@@ -238,25 +201,23 @@ f"{link}"
 
     except Exception as e:
 
-        print("Error en", portal, e)
+        print("ERROR:", e)
 
 
 guardar_json(SEEN_FILE, vistos)
 
 
-# ------------------------
-# MENSAJE FINAL
-# ------------------------
+# ----------------
+# FINAL
+# ----------------
 
 if nuevos == 0:
 
-    enviar_telegram("Radar activo sin novedades")
+    enviar("Radar activo sin novedades")
 
 else:
 
-    enviar_telegram(
-        f"Radar detectó {nuevos} empleos nuevos"
-    )
+    enviar(f"Radar detectó {nuevos} empleos nuevos")
 
 
-print("FIN RADAR")
+print("FIN")
