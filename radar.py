@@ -167,3 +167,122 @@ def bhp():
 def finning():
 
     lista=[]
+
+    url="https://finning.csod.com/ux/ats/careersite/"
+
+    r=requests.get(url)
+
+    soup=BeautifulSoup(r.text,"html.parser")
+
+    for a in soup.find_all("a"):
+
+        titulo=a.text.strip()
+
+        link=a.get("href","")
+
+        if "job" in link:
+
+            lista.append(("Finning",titulo,link,titulo))
+
+    return lista
+
+
+# =====================
+# LABORUM
+# =====================
+
+def laborum():
+
+    lista=[]
+
+    url="https://www.laborum.cl/empleos-mineria.html"
+
+    r=requests.get(url)
+
+    soup=BeautifulSoup(r.text,"html.parser")
+
+    for a in soup.find_all("a"):
+
+        titulo=a.text.strip()
+
+        link=a.get("href","")
+
+        if titulo!="":
+
+            lista.append(("Laborum",titulo,link,titulo))
+
+    return lista
+
+
+# =====================
+# EJECUCION
+# =====================
+
+telegram("RADAR V18 PRO INICIADO")
+
+empleos=[]
+
+empleos+=bhp()
+empleos+=finning()
+empleos+=laborum()
+
+revisados=0
+validos=0
+
+for empresa,titulo,link,texto in empleos:
+
+    revisados+=1
+
+    if link in memoria:
+        continue
+
+    if not es_chile(texto):
+        continue
+
+    s=score(titulo+" "+texto)
+
+    nivel=prioridad(s)
+
+    t=turno(texto)
+
+    msg=f"""
+
+{nivel}
+
+Empresa: {empresa}
+
+Cargo:
+{titulo}
+
+Turno: {t}
+
+Score:{s}
+
+Link:
+{link}
+
+IA Baronin:
+Alta compatibilidad detectada
+
+"""
+
+    telegram(msg)
+
+    memoria.append(link)
+
+    validos+=1
+
+
+guardar(memoria)
+
+telegram(f"""
+
+RADAR FINALIZADO
+
+Revisados:{revisados}
+
+Validos:{validos}
+
+Memoria:{len(memoria)}
+
+""")
