@@ -1,4 +1,5 @@
 import requests
+from bs4 import BeautifulSoup
 import os
 import json
 
@@ -7,91 +8,186 @@ CHAT_ID = os.environ["CHAT_ID"]
 
 MEMORIA_FILE = "memoria.json"
 
+# ---------- MEMORIA ----------
 try:
     with open(MEMORIA_FILE,"r") as f:
         memoria = json.load(f)
 except:
     memoria = []
 
+# ---------- FILTRO RUBEN ----------
+CARGOS_OBJETIVO = [
+"supervisor",
+"maintenance supervisor",
+"supervisor mantencion",
+"jefe mantencion",
+"planificador",
+"planner",
+"administrador de contrato",
+"contract administrator",
+"contract manager"
+]
+
+PALABRAS_MINERIA = [
+"mining",
+"minera",
+"faena",
+"mine"
+]
+
+# ---------- FUENTES REALES ----------
 FUENTES = {
 
 "Codelco":
-"https://jobs.codelco.cl/search/?createNewAlert=false&q=&locationsearch=",
+"https://jobs.codelco.cl/search/?q=",
+
+"BHP":
+"https://careers.bhp.com/search/?q=",
 
 "Antofagasta Minerals":
-"https://careers.antofagasta.co.uk/search/",
+"https://careers.antofagasta.co.uk/search/?q=",
+
+"Collahuasi":
+"https://www.collahuasi.cl/trabaja-con-nosotros/",
+
+"Kinross":
+"https://jobs.kinross.com/search/?q=",
 
 "Komatsu":
-"https://komatsu.jobs/search-jobs",
+"https://komatsu.jobs/search-jobs?acm=ALL",
 
 "Finning":
-"https://finning.com/es_CL/careers",
+"https://finning.taleo.net/careersection/finning_external/jobsearch.ftl",
 
 "Liebherr":
-"https://www.liebherr.com/en/cll/career/job-vacancies/job-vacancies.html"
+"https://www.liebherr.com/en/cll/career/job-vacancies/job-vacancies.html",
+
+"Sandvik":
+"https://jobs.smartrecruiters.com/Sandvik",
+
+"Epiroc":
+"https://epiroc.com/en-us/jobs",
+
+"Indeed":
+"https://cl.indeed.com/jobs?q=minera",
+
+"LinkedIn":
+"https://www.linkedin.com/jobs/search/?keywords=mining"
 
 }
 
+# ---------- TELEGRAM ----------
 def enviar(msg):
 
     requests.post(
+
         f"https://api.telegram.org/bot{TOKEN}/sendMessage",
+
         data={"chat_id":CHAT_ID,"text":msg}
+
     )
 
-enviar("RADAR V11 MULTIMINERA INICIADO")
+# ---------- ANALISIS IA ----------
+def analizar(texto):
 
-nuevos = 0
+    t = texto.lower()
+
+    if any(c in t for c in CARGOS_OBJETIVO):
+
+        if any(m in t for m in PALABRAS_MINERIA):
+
+            return "VALIDO"
+
+        else:
+
+            return "DESCARTADO: No menciona minería"
+
+    return "DESCARTADO: No es cargo objetivo"
+
+# ---------- INICIO ----------
+enviar("RADAR V13 COBERTURA TOTAL INICIADO")
+
 revisados = 0
+validos = 0
+descartados = 0
 
 headers = {"User-Agent":"Mozilla/5.0"}
 
-for nombre,url in FUENTES.items():
+for empresa,url in FUENTES.items():
 
     try:
 
-        html = requests.get(url,headers=headers).text
+        html = requests.get(url,headers=headers,timeout=15).text
 
-        if "job" in html.lower():
+        soup = BeautifulSoup(html,"html.parser")
 
-            revisados += 1
+        links = soup.find_all("a")
 
-            if url not in memoria:
+        for link in links:
 
-                memoria.append(url)
+            titulo = link.get_text().strip()
 
-                nuevos += 1
+            href = link.get("href")
 
-                enviar(f"""
+            if titulo and href:
 
-EMPLEO MINERO DETECTADO
+                revisados += 1
 
-Empresa: {nombre}
+                resultado = analizar(titulo)
 
-Revisar en:
+                if resultado == "VALIDO":
 
-{url}
+                    if titulo not in memoria:
+
+                        memoria.append(titulo)
+
+                        validos += 1
+
+                        if href.startswith("/"):
+
+                            href = url + href
+
+                        enviar(f"""
+
+NUEVO EMPLEO MINERO DETECTADO
+
+Empresa: {empresa}
+
+Cargo:
+{titulo}
+
+Link:
+{href}
+
+Analisis IA:
+Coincide con Supervisor / Administrador de Contratos
 
 """)
 
+                else:
+
+                    descartados += 1
+
     except:
 
-        pass
+        enviar(f"Error leyendo {empresa}")
 
-
+# ---------- GUARDAR MEMORIA ----------
 with open(MEMORIA_FILE,"w") as f:
 
     json.dump(memoria,f)
 
-
+# ---------- REPORTE FINAL ----------
 enviar(f"""
 
 RADAR FINALIZADO
 
-Fuentes revisadas: {revisados}
+Revisados: {revisados}
 
-Nuevos detectados: {nuevos}
+Validos: {validos}
 
-Total memoria: {len(memoria)}
+Descartados: {descartados}
+
+Memoria total: {len(memoria)}
 
 """)
