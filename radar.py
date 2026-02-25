@@ -1,5 +1,4 @@
 import requests
-from bs4 import BeautifulSoup
 import os
 import json
 
@@ -8,13 +7,12 @@ CHAT_ID = os.environ["CHAT_ID"]
 
 MEMORIA_FILE = "memoria.json"
 
+# Cargar memoria
 try:
     with open(MEMORIA_FILE,"r") as f:
         memoria = json.load(f)
 except:
     memoria = []
-
-URL = "https://www.trabajando.cl/trabajos/mineria"
 
 def enviar(msg):
 
@@ -23,45 +21,70 @@ def enviar(msg):
         data={"chat_id":CHAT_ID,"text":msg}
     )
 
-enviar("RADAR MINERO TRABAJANDO.CL INICIADO")
-
-html = requests.get(URL).text
-
-soup = BeautifulSoup(html,"html.parser")
-
-links = soup.find_all("a")
+enviar("RADAR MINERO V10 INICIADO")
 
 nuevos = 0
+revisados = 0
 
-for link in links:
+# FUENTE 1 — Indeed JSON real
 
-    titulo = link.get_text().strip()
+url = "https://cl.indeed.com/jobs?q=minera&l=Chile&format=json"
 
-    if len(titulo) > 20:
+headers = {
+"User-Agent":"Mozilla/5.0"
+}
 
-        if titulo not in memoria:
+try:
 
-            memoria.append(titulo)
+    resp = requests.get(url,headers=headers)
 
-            nuevos += 1
+    data = resp.text
 
-            enviar(f"""
+    if "title" in data:
+
+        lineas = data.split("title")
+
+        for linea in lineas:
+
+            if "min" in linea.lower():
+
+                titulo = linea.strip()
+
+                revisados += 1
+
+                if titulo not in memoria:
+
+                    memoria.append(titulo)
+
+                    nuevos += 1
+
+                    enviar(f"""
 
 EMPLEO MINERO DETECTADO
 
 {titulo}
 
-Fuente: Trabajando.cl
+Fuente: Indeed
 
 """)
+
+except:
+
+    enviar("Error leyendo Indeed")
+
+
+# GUARDAR MEMORIA
 
 with open(MEMORIA_FILE,"w") as f:
 
     json.dump(memoria,f)
 
+
 enviar(f"""
 
 RADAR FINALIZADO
+
+Revisados: {revisados}
 
 Nuevos: {nuevos}
 
