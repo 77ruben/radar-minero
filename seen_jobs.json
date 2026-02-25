@@ -1,1 +1,8 @@
-[]
+{
+  "rechazados": [],
+  "aceptados": [],
+  "empresas_buenas": [],
+  "empresas_malas": [],
+  "ciudades_malas": [],
+  "turnos_buenos": ["7x7", "10x10", "14x14", "4x3"]
+}
