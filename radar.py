@@ -123,6 +123,11 @@ def buscar_generico(nombre, url):
 
                 continue
 
+            # convertir link relativo en absoluto
+            if href.startswith("/"):
+
+                href = url.rstrip("/") + href
+
             texto = titulo + " " + nombre
 
             if cumple_filtro(texto):
@@ -139,17 +144,11 @@ def buscar_generico(nombre, url):
 
                 print("VALIDO:", titulo)
 
-            else:
-
-                print("DESCARTADO:", titulo)
-
-
     except:
 
-        print(nombre, "omitido por error")
+        print(nombre, "omitido")
 
     return lista
-
 
 # ==========================
 # EMPRESAS
