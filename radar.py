@@ -2,31 +2,26 @@ import requests
 from bs4 import BeautifulSoup
 import os
 import json
-import re
 
 TOKEN = os.environ["TOKEN"]
 CHAT_ID = os.environ["CHAT_ID"]
 
-print("RADAR MINERO V14 PRO CHILE INICIADO")
+print("RADAR MINERO V15 ULTRA INICIADO")
 
 # ==========================
-# FILTROS PROFESIONALES
+# CONFIG PERFIL RUBEN
 # ==========================
 
-CARGOS = [
+CARGOS_PRIORIDAD = [
 
 "supervisor",
 "administrador de contratos",
 "contract administrator",
-"jefe",
-"planner",
-"planificador",
-"mantencion",
-"mantenimiento",
-"maintenance",
-"confiabilidad",
+"ingeniero confiabilidad",
 "reliability",
-"ingeniero mantenimiento"
+"planificador",
+"planner",
+"jefe mantenimiento"
 
 ]
 
@@ -35,41 +30,18 @@ TURNOS = [
 "14x14",
 "10x10",
 "7x7",
-"4x3",
-"turno"
+"4x3"
 
 ]
 
-UBICACION_CHILE = [
+UBICACION = [
 
 "chile",
 "antofagasta",
 "calama",
 "copiapo",
-"iquique",
 "faena",
-"minera",
-"collahuasi",
-"escondida",
-"spence",
-"los bronces",
-"codelco",
-"chuquicamata"
-
-]
-
-PALABRAS_EXTRANJERO = [
-
-"peru",
-"australia",
-"canada",
-"usa",
-"mexico",
-"argentina",
-"wy",
-"tn",
-"nsw",
-"queensland"
+"minera"
 
 ]
 
@@ -77,37 +49,11 @@ PALABRAS_EXTRANJERO = [
 # MEMORIA
 # ==========================
 
-ARCHIVO = "memoria.json"
-
 try:
-    with open(ARCHIVO,"r") as f:
-        memoria = json.load(f)
+    with open("memoria.json","r") as f:
+        memoria=json.load(f)
 except:
-    memoria = []
-
-# ==========================
-# IA ANALISIS
-# ==========================
-
-def analisis_ia(texto):
-
-    t = texto.lower()
-
-    if any(p in t for p in PALABRAS_EXTRANJERO):
-        return False, "Extranjero"
-
-    if not any(p in t for p in UBICACION_CHILE):
-        return False, "No indica Chile"
-
-    if any(c in t for c in CARGOS):
-
-        if any(turno in t for turno in TURNOS):
-            return True, "Cargo + Turno OK"
-
-        return True, "Cargo OK"
-
-    return False, "No cumple perfil"
-
+    memoria=[]
 
 # ==========================
 # TELEGRAM
@@ -123,31 +69,70 @@ def enviar(msg):
     )
 
 # ==========================
-# BUSCAR TRABAJOS
+# LEER DESCRIPCION
 # ==========================
 
-def buscar_bhp():
+def leer_descripcion(link):
 
-    lista = []
+    try:
 
-    url = "https://careers.bhp.com/search/?q=&locationsearch=Chile"
+        html=requests.get(link,timeout=10).text
 
-    html = requests.get(url).text
+        return html.lower()
 
-    soup = BeautifulSoup(html,"html.parser")
+    except:
+
+        return ""
+
+# ==========================
+# IA REAL
+# ==========================
+
+def filtro_ia(titulo,link):
+
+    texto = titulo.lower()
+
+    if not any(c in texto for c in CARGOS_PRIORIDAD):
+        return False,"Cargo no coincide"
+
+    descripcion = leer_descripcion(link)
+
+    texto_total = texto + descripcion
+
+    if not any(u in texto_total for u in UBICACION):
+        return False,"No Chile"
+
+    turno_detectado="No indica"
+
+    for t in TURNOS:
+
+        if t in texto_total:
+            turno_detectado=t
+
+    return True,f"OK Turno:{turno_detectado}"
+
+# ==========================
+# BHP
+# ==========================
+
+def bhp():
+
+    lista=[]
+
+    url="https://careers.bhp.com/search/?locationsearch=Chile"
+
+    soup=BeautifulSoup(requests.get(url).text,"html.parser")
 
     for a in soup.find_all("a"):
 
-        titulo = a.text.strip()
-
-        link = a.get("href","")
+        link=a.get("href","")
 
         if "/job/" in link:
 
             lista.append({
 
                 "empresa":"BHP",
-                "titulo":titulo,
+                "titulo":a.text.strip(),
                 "link":"https://careers.bhp.com"+link
 
             })
@@ -155,48 +140,19 @@ def buscar_bhp():
     return lista
 
 
-def buscar_liebherr():
+# ==========================
+# KOMATSU
+# ==========================
 
-    lista=[]
-
-    url="https://www.liebherr.com/en/cln/careers/job-vacancies/job-vacancies.html"
-
-    html=requests.get(url).text
-
-    soup=BeautifulSoup(html,"html.parser")
-
-    for a in soup.find_all("a"):
-
-        titulo=a.text.strip()
-
-        link=a.get("href","")
-
-        if "job" in link.lower():
-
-            lista.append({
-
-                "empresa":"Liebherr",
-                "titulo":titulo,
-                "link":link
-
-            })
-
-    return lista
-
-
-def buscar_komatsu():
+def komatsu():
 
     lista=[]
 
     url="https://komatsu.jobs/search/?location=Chile"
 
-    html=requests.get(url).text
-
-    soup=BeautifulSoup(html,"html.parser")
+    soup=BeautifulSoup(requests.get(url).text,"html.parser")
 
     for a in soup.find_all("a"):
-
-        titulo=a.text.strip()
 
         link=a.get("href","")
 
@@ -205,7 +161,7 @@ def buscar_komatsu():
             lista.append({
 
                 "empresa":"Komatsu",
-                "titulo":titulo,
+                "titulo":a.text.strip(),
                 "link":link
 
             })
@@ -217,78 +173,62 @@ def buscar_komatsu():
 # EJECUCION
 # ==========================
 
+fuentes=[bhp,komatsu]
+
 todos=[]
 
-for funcion in [
-
-buscar_bhp,
-buscar_liebherr,
-buscar_komatsu
-
-]:
+for f in fuentes:
 
     try:
-
-        todos.extend(funcion())
-
+        todos.extend(f())
     except:
-
-        print("Error fuente")
-
-# ==========================
+        print("error fuente")
 
 revisados=0
 validos=0
 
-for trabajo in todos:
+for job in todos:
 
     revisados+=1
 
-    texto = trabajo["titulo"]
-
-    ok, razon = analisis_ia(texto)
+    ok,info=filtro_ia(job["titulo"],job["link"])
 
     if not ok:
         continue
 
-    if trabajo["link"] in memoria:
+    if job["link"] in memoria:
         continue
 
-    memoria.append(trabajo["link"])
+    memoria.append(job["link"])
 
     validos+=1
 
-    enviar(
+    enviar(f"""
 
-f"""
+NUEVO EMPLEO MINERO PREMIUM
 
-NUEVO EMPLEO MINERO CHILE
-
-Empresa: {trabajo["empresa"]}
+Empresa: {job['empresa']}
 
 Cargo:
-{trabajo["titulo"]}
+{job['titulo']}
 
 Link:
-{trabajo["link"]}
+{job['link']}
 
 IA:
-{razon}
+{info}
 
-"""
-
-)
+""")
 
 # ==========================
 
-with open(ARCHIVO,"w") as f:
+with open("memoria.json","w") as f:
+
     json.dump(memoria,f)
 
 # ==========================
 
-enviar(
-
-f"""
+enviar(f"""
 
 RADAR FINALIZADO
 
@@ -298,6 +238,4 @@ Validos:{validos}
 
 Memoria:{len(memoria)}
 
-"""
-
-)
+""")
