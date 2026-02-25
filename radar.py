@@ -1,9 +1,22 @@
 import requests
 from bs4 import BeautifulSoup
 import os
+import json
 
 TOKEN = os.environ["TOKEN"]
 CHAT_ID = os.environ["CHAT_ID"]
+
+ARCHIVO_MEMORIA = "memoria.json"
+
+# CARGAR MEMORIA
+
+try:
+    with open(ARCHIVO_MEMORIA,"r") as f:
+        memoria = json.load(f)
+except:
+    memoria = []
+
+# FILTROS
 
 CARGOS = [
 "supervisor",
@@ -11,28 +24,32 @@ CARGOS = [
 "mantenimiento",
 "planificador",
 "confiabilidad",
-"administrador de contrato"
+"contrato"
 ]
 
-MINERIA = [
+MINERAS = [
 "minera",
+"mining",
 "faena",
-"minero",
-"contrato minero"
+"codelco",
+"bhp",
+"collahuasi",
+"kinross",
+"antofagasta minerals",
+"teck"
 ]
 
 EXCLUIR = [
 "sueldo",
 "salario",
-"blog",
-"noticia"
+"blog"
 ]
 
 URLS = [
 
 "https://www.chiletrabajos.cl/trabajo/minera",
 "https://cl.indeed.com/jobs?q=minera",
-"https://www.bne.cl/ofertas"
+"https://www.laborum.cl"
 
 ]
 
@@ -45,29 +62,27 @@ def enviar(msg):
     "text":msg
 })
 
-
 def analizar(texto):
 
     texto = texto.lower()
 
     if any(e in texto for e in EXCLUIR):
-        return "DESCARTADO: basura"
+        return False,"Basura"
 
     if not any(c in texto for c in CARGOS):
-        return "DESCARTADO: no es cargo objetivo"
+        return False,"No es cargo objetivo"
 
-    if not any(m in texto for m in MINERIA):
-        return "DESCARTADO: no es mineria"
+    if not any(m in texto for m in MINERAS):
+        return False,"No es minería"
 
-    return "VALIDO"
+    return True,"Empleo Minero Real"
 
+
+enviar("RADAR V7 PRO IA INICIADO")
 
 total = 0
-validos = 0
-descartados = 0
-
-enviar("RADAR MINERO V6 INICIADO")
-
+nuevos = 0
+repetidos = 0
 
 for url in URLS:
 
@@ -86,34 +101,53 @@ for url in URLS:
 
         total += 1
 
-        resultado = analizar(texto)
+        valido,razon = analizar(texto)
 
-        if resultado == "VALIDO":
+        if valido:
 
-            validos += 1
+            if texto in memoria:
 
-            enviar(
-f"""⛏ EMPLEO DETECTADO
+                repetidos += 1
 
+            else:
+
+                nuevos += 1
+
+                memoria.append(texto)
+
+                enviar(f"""
+
+NUEVO EMPLEO MINERO DETECTADO
+
+Cargo:
 {texto}
 
-{link.get('href')}
-"""
-)
+Fuente:
+{url}
 
-        else:
+Analisis IA:
+{razon}
 
-            descartados += 1
+""")
+
+
+# GUARDAR MEMORIA
+
+with open(ARCHIVO_MEMORIA,"w") as f:
+
+    json.dump(memoria,f)
 
 
 enviar(f"""
 
-RADAR FINALIZADO
+RADAR V7 PRO FINALIZADO
 
 Revisados: {total}
 
-Validos: {validos}
+Nuevos: {nuevos}
 
-Descartados: {descartados}
+Repetidos: {repetidos}
+
+Memoria IA: {len(memoria)} empleos almacenados
 
 """)
