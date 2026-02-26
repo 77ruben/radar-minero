@@ -2,11 +2,11 @@ import requests
 from bs4 import BeautifulSoup
 import os
 
-print("RADAR MINERO V20 FILTRO PRO — NIVEL HEADHUNTER")
+print("RADAR MINERO V21 RECLUTADOR — PORTALES + MINERAS")
 
-# ==========================
+# ==========================================
 # TELEGRAM
-# ==========================
+# ==========================================
 
 TOKEN = os.environ["TOKEN"]
 CHAT_ID = os.environ["CHAT_ID"]
@@ -16,85 +16,76 @@ def enviar(msg):
     try:
 
         requests.post(
-
             f"https://api.telegram.org/bot{TOKEN}/sendMessage",
-
             data={"chat_id": CHAT_ID, "text": msg}
-
         )
 
     except:
 
-        print("Error enviando Telegram")
+        print("Error Telegram")
 
 
-# ==========================
+# ==========================================
 # MEMORIA
-# ==========================
+# ==========================================
 
-ARCHIVO_MEMORIA = "memoria.txt"
-
+ARCHIVO = "memoria.txt"
 
 def cargar_memoria():
 
     try:
 
-        with open(ARCHIVO_MEMORIA, "r") as f:
-
+        with open(ARCHIVO,"r") as f:
             return set(f.read().splitlines())
 
     except:
-
         return set()
 
 
-def guardar_memoria(memoria):
+def guardar_memoria(mem):
 
-    with open(ARCHIVO_MEMORIA, "w") as f:
+    with open(ARCHIVO,"w") as f:
 
-        for link in memoria:
-
-            f.write(link + "\n")
+        for link in mem:
+            f.write(link+"\n")
 
 
 memoria = cargar_memoria()
 
 
-# ==========================
-# FILTRO PROFESIONAL
-# ==========================
+# ==========================================
+# FILTRO PROFESIONAL MINERO
+# ==========================================
 
-CARGOS_PRO = [
+CARGOS = [
 
-    "supervisor",
-    "jefe",
-    "administrador de contratos",
-    "administrador contrato",
-    "contract administrator",
-    "contract manager",
-    "planificador",
-    "planner",
-    "ingeniero mantenimiento",
-    "ingeniero mantencion",
-    "supervisor operaciones",
-    "jefe mantenimiento",
-    "jefe mantencion",
-    "maintenance supervisor",
+"supervisor",
+"jefe",
+"administrador",
+"contract administrator",
+"contract manager",
+"planner",
+"planificador",
+"ingeniero mantenimiento",
+"ingeniero mantencion",
+"maintenance supervisor",
+"supervisor operaciones",
 
 ]
 
 EXCLUIR = [
 
-    "practica",
-    "práctica",
-    "alumno",
-    "trainee",
-    "aprendiz",
-    "operador",
-    "operaria",
+"practica",
+"práctica",
+"trainee",
+"alumno",
+"operador",
+"operaria"
+
 ]
 
-def cumple_filtro(texto):
+
+def filtro(texto):
 
     texto = texto.lower()
 
@@ -102,137 +93,162 @@ def cumple_filtro(texto):
 
         return False
 
-    if any(x in texto for x in CARGOS_PRO):
+    if any(x in texto for x in CARGOS):
 
         return True
 
     return False
 
 
-# ==========================
-# BUSCADOR GENERICO
-# ==========================
+# ==========================================
+# FUNCION GENERICA
+# ==========================================
 
-def buscar(nombre, url, dominio):
+def buscar(nombre,url,dominio):
 
-    print("Buscando en", nombre)
+    print("Buscando:",nombre)
 
-    lista = []
+    lista=[]
 
     try:
 
-        r = requests.get(url, timeout=20)
+        r=requests.get(url,timeout=20)
 
-        soup = BeautifulSoup(r.text, "html.parser")
+        soup=BeautifulSoup(r.text,"html.parser")
 
         for link in soup.find_all("a"):
 
-            titulo = link.get_text(strip=True)
+            titulo=link.get_text(strip=True)
 
-            href = link.get("href")
+            href=link.get("href")
 
             if not titulo or not href:
-
                 continue
 
             if href.startswith("/"):
 
-                href = dominio + href
+                href=dominio+href
 
-            texto = titulo + " " + nombre
 
-            if cumple_filtro(texto):
+            texto=titulo+" "+nombre
+
+            if filtro(texto):
 
                 lista.append({
 
-                    "titulo": titulo,
-
-                    "empresa": nombre,
-
-                    "link": href
+                "titulo":titulo,
+                "empresa":nombre,
+                "link":href
 
                 })
 
-                print("VALIDO:", titulo)
+                print("OK:",titulo)
 
     except:
 
-        print("Error en", nombre)
+        print("Error en",nombre)
 
     return lista
 
 
-# ==========================
-# EMPRESAS
-# ==========================
+# ==========================================
+# PORTALES EMPLEO CHILE
+# ==========================================
 
-empleos = []
+empleos=[]
 
-empleos += buscar(
 
-    "Codelco",
+# MINERAS
 
-    "https://empleos.codelco.cl/",
+empleos+=buscar(
 
-    "https://empleos.codelco.cl"
-
-)
-
-empleos += buscar(
-
-    "BHP",
-
-    "https://jobs.bhp.com/search/",
-
-    "https://jobs.bhp.com"
-
-)
-
-empleos += buscar(
-
-    "Finning",
-
-    "https://finning.csod.com/ux/ats/careersite/4/home?c=finning&lang=es-CL",
-
-    "https://finning.csod.com"
-
-)
-
-empleos += buscar(
-
-    "Komatsu",
-
-    "https://komatsu.jobs/jobs",
-
-    "https://komatsu.jobs"
+"Codelco",
+"https://empleos.codelco.cl/",
+"https://empleos.codelco.cl"
 
 )
 
 
-# ==========================
-# ELIMINAR DUPLICADOS INTERNOS
-# ==========================
+empleos+=buscar(
 
-unicos = []
+"BHP",
+"https://jobs.bhp.com/search/",
+"https://jobs.bhp.com"
 
-vistos = set()
+)
+
+
+empleos+=buscar(
+
+"Finning",
+"https://finning.csod.com/",
+"https://finning.csod.com"
+
+)
+
+
+empleos+=buscar(
+
+"Komatsu",
+"https://komatsu.jobs/jobs",
+"https://komatsu.jobs"
+
+)
+
+
+
+# PORTALES
+
+empleos+=buscar(
+
+"Chiletrabajos",
+"https://www.chiletrabajos.cl/",
+"https://www.chiletrabajos.cl"
+
+)
+
+
+empleos+=buscar(
+
+"Trabajando",
+"https://www.trabajando.cl/",
+"https://www.trabajando.cl"
+
+)
+
+
+empleos+=buscar(
+
+"Indeed",
+"https://cl.indeed.com/jobs?q=mineria",
+"https://cl.indeed.com"
+
+)
+
+
+
+# ==========================================
+# ELIMINAR DUPLICADOS
+# ==========================================
+
+unicos=[]
+vistos=set()
 
 for e in empleos:
 
     if e["link"] not in vistos:
 
         unicos.append(e)
-
         vistos.add(e["link"])
 
-empleos = unicos
+empleos=unicos
 
 
-# ==========================
+# ==========================================
 # FILTRAR NUEVOS
-# ==========================
+# ==========================================
 
-nuevos = []
+nuevos=[]
 
 for e in empleos:
 
@@ -243,33 +259,37 @@ for e in empleos:
         memoria.add(e["link"])
 
 
-# ==========================
-# TELEGRAM
-# ==========================
 
-enviar("RADAR V20 FILTRO PRO INICIADO")
+# ==========================================
+# TELEGRAM
+# ==========================================
+
+enviar("RADAR V21 RECLUTADOR INICIADO")
 
 
 if nuevos:
 
-    msg = "EMPLEOS NUEVOS\n\n"
+    msg="EMPLEOS NUEVOS\n\n"
 
-    for e in nuevos:
+    for e in nuevos[:15]:
 
-        msg += f"{e['titulo']}\n{e['empresa']}\n{e['link']}\n\n"
+        msg+=f"{e['titulo']}\n{e['empresa']}\n{e['link']}\n\n"
+
 
     enviar(msg)
 
+
 else:
 
-    enviar("Sin empleos nuevos compatibles con tu perfil")
+    enviar("Sin empleos nuevos en portales y mineras")
 
 
-enviar("RADAR V20 FINALIZADO")
+enviar("RADAR V21 FINALIZADO")
 
 
-# ==========================
+
+# ==========================================
 # GUARDAR MEMORIA
-# ==========================
+# ==========================================
 
 guardar_memoria(memoria)
