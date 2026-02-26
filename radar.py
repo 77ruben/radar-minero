@@ -3,172 +3,152 @@ from bs4 import BeautifulSoup
 import os
 import json
 
-print("RADAR V25 TITAN HEADHUNTER INICIADO")
+print("RADAR V26 BLACK BELT INICIADO")
 
 TOKEN = os.environ["TOKEN"]
 CHAT_ID = os.environ["CHAT_ID"]
 
 ARCHIVO = "historial.json"
 
-# PALABRAS CLAVE HEADHUNTER
+HEADERS = {
+    "User-Agent": "Mozilla/5.0"
+}
 
 KEYWORDS = [
-
     "mantenimiento",
     "mantencion",
     "operaciones",
-    "operacion",
     "supervisor",
     "jefe",
     "administrador",
     "contrato",
     "planner",
     "planificador",
-    "ingeniero"
-
+    "ingeniero",
+    "turno",
+    "7x7",
+    "14x14",
+    "4x3"
 ]
 
-# CARGAR HISTORIAL
+EXCLUIR = [
+    "practica",
+    "práctica",
+    "trainee",
+    "alumno"
+]
+
+EMPRESAS = {
+
+    "Codelco": "https://empleos.codelco.cl",
+    "Kinross": "https://jobs.kinross.com",
+    "BHP": "https://jobs.bhp.com",
+    "Anglo American": "https://jobs.angloamerican.com",
+    "Antofagasta Minerals": "https://www.aminerals.cl",
+    "Collahuasi": "https://www.collahuasi.cl",
+    "Teck": "https://jobs.teck.com",
+    "Sierra Gorda": "https://www.sgscm.cl",
+    "Finning": "https://finning.csod.com",
+    "Komatsu": "https://komatsu.jobs",
+    "Enaex": "https://enaex.jobs",
+    "Orica": "https://orica.jobs",
+    "Metso": "https://metso.jobs"
+}
+
+# ------------------------------
+# HISTORIAL
+# ------------------------------
 
 if os.path.exists(ARCHIVO):
-
-    with open(ARCHIVO,"r") as f:
+    with open(ARCHIVO, "r") as f:
         historial = json.load(f)
-
 else:
-
     historial = []
-
 
 nuevos = []
 
-
-# FUNCION FILTRO
+# ------------------------------
+# FILTRO
+# ------------------------------
 
 def cumple(texto):
+    t = texto.lower()
 
-    texto = texto.lower()
+    if any(x in t for x in EXCLUIR):
+        return False
 
-    return any(k in texto for k in KEYWORDS)
+    return any(k in t for k in KEYWORDS)
 
+# ------------------------------
+# SCRAPER SIMPLE
+# ------------------------------
 
+def scrap_empresa(nombre, url):
 
-# ========================
-# CODELCO REAL
-# ========================
+    try:
+        r = requests.get(url, headers=HEADERS, timeout=20)
+        soup = BeautifulSoup(r.text, "html.parser")
 
-try:
+        for link in soup.find_all("a"):
 
-    url = "https://empleos.codelco.cl"
+            titulo = link.get_text(strip=True)
+            href = link.get("href")
 
-    soup = BeautifulSoup(requests.get(url).text,"html.parser")
+            if not href or not titulo:
+                continue
 
-    for link in soup.find_all("a"):
+            if "/job" not in href.lower():
+                continue
 
-        titulo = link.text.strip()
+            if not cumple(titulo):
+                continue
 
-        href = link.get("href")
+            if href.startswith("/"):
+                link_completo = url.rstrip("/") + href
+            else:
+                link_completo = href
 
-        if not href:
-            continue
+            if link_completo in historial:
+                continue
 
-        if "/job/" not in href:
-            continue
+            nuevos.append(
+                f"{titulo}\n{nombre}\n{link_completo}"
+            )
 
-        if not cumple(titulo):
-            continue
+            historial.append(link_completo)
 
-        link_completo = url + href
+    except:
+        print(f"Error en {nombre}")
 
-        if link_completo in historial:
-            continue
+# ------------------------------
+# EJECUCION
+# ------------------------------
 
-        nuevos.append(
-            titulo + "\nCodelco\n" + link_completo
-        )
+for empresa, url in EMPRESAS.items():
+    scrap_empresa(empresa, url)
 
-        historial.append(link_completo)
-
-except:
-
-    pass
-
-
-
-# ========================
-# KINROSS REAL
-# ========================
-
-try:
-
-    url = "https://jobs.kinross.com"
-
-    soup = BeautifulSoup(requests.get(url).text,"html.parser")
-
-    for link in soup.find_all("a"):
-
-        titulo = link.text.strip()
-
-        href = link.get("href")
-
-        if not href:
-            continue
-
-        if "/job/" not in href:
-            continue
-
-        if not cumple(titulo):
-            continue
-
-        link_completo = url + href
-
-        if link_completo in historial:
-            continue
-
-        nuevos.append(
-            titulo + "\nKinross\n" + link_completo
-        )
-
-        historial.append(link_completo)
-
-except:
-
-    pass
-
-
-
+# ------------------------------
 # GUARDAR HISTORIAL
+# ------------------------------
 
-with open(ARCHIVO,"w") as f:
+with open(ARCHIVO, "w") as f:
+    json.dump(historial, f)
 
-    json.dump(historial,f)
-
-
-
-# ENVIAR TELEGRAM
+# ------------------------------
+# TELEGRAM
+# ------------------------------
 
 if nuevos:
-
-    mensaje = "\n\n".join(nuevos)
-
+    mensaje = "RADAR V26 BLACK BELT\n\n" + "\n\n".join(nuevos[:25])
 else:
-
-    mensaje = "Sin empleos nuevos reales"
-
+    mensaje = "RADAR V26 BLACK BELT\n\nSin empleos nuevos compatibles"
 
 requests.post(
-
     f"https://api.telegram.org/bot{TOKEN}/sendMessage",
-
     data={
-
         "chat_id": CHAT_ID,
-
-        "text": "RADAR V25 TITAN HEADHUNTER\n\n" + mensaje
-
+        "text": mensaje
     }
-
 )
 
-
-print("RADAR V25 FINALIZADO")
+print("RADAR V26 FINALIZADO")
