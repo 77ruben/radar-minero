@@ -1,10 +1,8 @@
 import requests
 from bs4 import BeautifulSoup
 import os
-import sys
-import traceback
 
-print("RADAR MINERO V19 HEADHUNTER — NIVEL PROFESIONAL")
+print("RADAR MINERO V20 FILTRO PRO — NIVEL HEADHUNTER")
 
 # ==========================
 # TELEGRAM
@@ -31,50 +29,70 @@ def enviar(msg):
 
 
 # ==========================
-# FILTRO INTELIGENTE
+# MEMORIA
 # ==========================
 
-PALABRAS_CLAVE = [
+ARCHIVO_MEMORIA = "memoria.txt"
+
+
+def cargar_memoria():
+
+    try:
+
+        with open(ARCHIVO_MEMORIA, "r") as f:
+
+            return set(f.read().splitlines())
+
+    except:
+
+        return set()
+
+
+def guardar_memoria(memoria):
+
+    with open(ARCHIVO_MEMORIA, "w") as f:
+
+        for link in memoria:
+
+            f.write(link + "\n")
+
+
+memoria = cargar_memoria()
+
+
+# ==========================
+# FILTRO PROFESIONAL
+# ==========================
+
+CARGOS_PRO = [
 
     "supervisor",
     "jefe",
-    "lider",
-    "líder",
-
-    "administrador",
-    "contrato",
-    "contratos",
-
-    "operaciones",
-
-    "mantencion",
-    "mantenimiento",
-
+    "administrador de contratos",
+    "administrador contrato",
+    "contract administrator",
+    "contract manager",
     "planificador",
-
-    "ingeniero",
-
-]
-
-TURNOS = [
-
-    "7x7",
-    "10x10",
-    "14x14",
-    "4x3",
+    "planner",
+    "ingeniero mantenimiento",
+    "ingeniero mantencion",
+    "supervisor operaciones",
+    "jefe mantenimiento",
+    "jefe mantencion",
+    "maintenance supervisor",
 
 ]
 
 EXCLUIR = [
 
-    "alumno",
     "practica",
     "práctica",
+    "alumno",
     "trainee",
     "aprendiz",
-
+    "operador",
+    "operaria",
 ]
-
 
 def cumple_filtro(texto):
 
@@ -84,11 +102,7 @@ def cumple_filtro(texto):
 
         return False
 
-    if any(x in texto for x in PALABRAS_CLAVE):
-
-        return True
-
-    if any(x in texto for x in TURNOS):
+    if any(x in texto for x in CARGOS_PRO):
 
         return True
 
@@ -96,10 +110,10 @@ def cumple_filtro(texto):
 
 
 # ==========================
-# BUSQUEDA GENERICA
+# BUSCADOR GENERICO
 # ==========================
 
-def buscar_generico(nombre, url):
+def buscar(nombre, url, dominio):
 
     print("Buscando en", nombre)
 
@@ -111,9 +125,7 @@ def buscar_generico(nombre, url):
 
         soup = BeautifulSoup(r.text, "html.parser")
 
-        links = soup.find_all("a")
-
-        for link in links:
+        for link in soup.find_all("a"):
 
             titulo = link.get_text(strip=True)
 
@@ -123,10 +135,9 @@ def buscar_generico(nombre, url):
 
                 continue
 
-            # convertir link relativo en absoluto
             if href.startswith("/"):
 
-                href = url.rstrip("/") + href
+                href = dominio + href
 
             texto = titulo + " " + nombre
 
@@ -146,133 +157,119 @@ def buscar_generico(nombre, url):
 
     except:
 
-        print(nombre, "omitido")
+        print("Error en", nombre)
 
     return lista
+
 
 # ==========================
 # EMPRESAS
 # ==========================
 
-def bhp():
-
-    return buscar_generico(
-
-        "BHP",
-
-        "https://jobs.bhp.com/search/"
-
-    )
-
-
-def finning():
-
-    return buscar_generico(
-
-        "Finning",
-
-        "https://finning.csod.com/ux/ats/careersite/4/home?c=finning&lang=es-CL"
-
-    )
-
-
-def komatsu():
-
-    return buscar_generico(
-
-        "Komatsu",
-
-        "https://komatsu.jobs/jobs"
-
-    )
-
-
-def collahuasi():
-
-    return buscar_generico(
-
-        "Collahuasi",
-
-        "https://www.collahuasi.cl/personas/trabaja-con-nosotros/"
-
-    )
-
-
-def codelco():
-
-    return buscar_generico(
-
-        "Codelco",
-
-        "https://empleos.codelco.cl/"
-
-    )
-
-
-def amsa():
-
-    return buscar_generico(
-
-        "Antofagasta Minerals",
-
-        "https://www.aminerals.cl/empleo/"
-
-    )
-
-
-def anglo():
-
-    return buscar_generico(
-
-        "Anglo American",
-
-        "https://jobs.angloamerican.com/"
-
-    )
-
-
-# ==========================
-# INICIO
-# ==========================
-
-enviar("RADAR V19 HEADHUNTER INICIADO")
-
 empleos = []
 
-try:
+empleos += buscar(
 
-    empleos += bhp()
-    empleos += finning()
-    empleos += komatsu()
-    empleos += collahuasi()
-    empleos += codelco()
-    empleos += amsa()
-    empleos += anglo()
+    "Codelco",
 
-except:
+    "https://empleos.codelco.cl/",
 
-    print("Error general")
+    "https://empleos.codelco.cl"
 
-print("TOTAL:", len(empleos))
+)
+
+empleos += buscar(
+
+    "BHP",
+
+    "https://jobs.bhp.com/search/",
+
+    "https://jobs.bhp.com"
+
+)
+
+empleos += buscar(
+
+    "Finning",
+
+    "https://finning.csod.com/ux/ats/careersite/4/home?c=finning&lang=es-CL",
+
+    "https://finning.csod.com"
+
+)
+
+empleos += buscar(
+
+    "Komatsu",
+
+    "https://komatsu.jobs/jobs",
+
+    "https://komatsu.jobs"
+
+)
 
 
 # ==========================
-# RESULTADOS
+# ELIMINAR DUPLICADOS INTERNOS
 # ==========================
 
-if empleos:
+unicos = []
 
-    mensaje = "EMPLEOS ENCONTRADOS\n\n"
+vistos = set()
 
-    for e in empleos[:10]:
+for e in empleos:
 
-        mensaje += f"{e['titulo']}\n{e['empresa']}\n{e['link']}\n\n"
+    if e["link"] not in vistos:
 
-    enviar(mensaje)
+        unicos.append(e)
+
+        vistos.add(e["link"])
+
+empleos = unicos
+
+
+# ==========================
+# FILTRAR NUEVOS
+# ==========================
+
+nuevos = []
+
+for e in empleos:
+
+    if e["link"] not in memoria:
+
+        nuevos.append(e)
+
+        memoria.add(e["link"])
+
+
+# ==========================
+# TELEGRAM
+# ==========================
+
+enviar("RADAR V20 FILTRO PRO INICIADO")
+
+
+if nuevos:
+
+    msg = "EMPLEOS NUEVOS\n\n"
+
+    for e in nuevos:
+
+        msg += f"{e['titulo']}\n{e['empresa']}\n{e['link']}\n\n"
+
+    enviar(msg)
 
 else:
 
-    enviar("Sin empleos validos en esta ejecución")
+    enviar("Sin empleos nuevos compatibles con tu perfil")
 
 
-enviar("RADAR V19 FINALIZADO")
+enviar("RADAR V20 FINALIZADO")
+
+
+# ==========================
+# GUARDAR MEMORIA
+# ==========================
+
+guardar_memoria(memoria)
