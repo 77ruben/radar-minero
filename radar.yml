@@ -1,5 +1,13 @@
 name: Radar Minero V10 IA
 
+- name: Commit historial
+        run: |
+          git config --global user.name "github-actions"
+          git config --global user.email "actions@github.com"
+          git add historial.json
+          git commit -m "update historial" || echo "no changes"
+          git push
+
 on:
   schedule:
     - cron: '0 */6 * * *' # Se ejecuta solo cada 6 horas
