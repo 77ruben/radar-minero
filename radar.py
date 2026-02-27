@@ -3,7 +3,7 @@ from bs4 import BeautifulSoup
 import os
 import json
 
-print("RADAR V26 BLACK BELT INICIADO")
+print("RADAR V26.3 BLACK BELT INICIADO")
 
 TOKEN = os.environ["TOKEN"]
 CHAT_ID = os.environ["CHAT_ID"]
@@ -38,26 +38,9 @@ EXCLUIR = [
     "alumno"
 ]
 
-EMPRESAS = {
-
-    "Codelco": "https://empleos.codelco.cl",
-    "Kinross": "https://jobs.kinross.com",
-    "BHP": "https://jobs.bhp.com",
-    "Anglo American": "https://jobs.angloamerican.com",
-    "Antofagasta Minerals": "https://www.aminerals.cl",
-    "Collahuasi": "https://www.collahuasi.cl",
-    "Teck": "https://jobs.teck.com",
-    "Sierra Gorda": "https://www.sgscm.cl",
-    "Finning": "https://finning.csod.com",
-    "Komatsu": "https://komatsu.jobs",
-    "Enaex": "https://enaex.jobs",
-    "Orica": "https://orica.jobs",
-    "Metso": "https://metso.jobs"
-}
-
-# ------------------------------
+# --------------------------
 # HISTORIAL
-# ------------------------------
+# --------------------------
 
 if os.path.exists(ARCHIVO):
     with open(ARCHIVO, "r") as f:
@@ -67,9 +50,9 @@ else:
 
 nuevos = []
 
-# ------------------------------
+# --------------------------
 # FILTRO
-# ------------------------------
+# --------------------------
 
 def cumple(texto):
     t = texto.lower()
@@ -79,69 +62,86 @@ def cumple(texto):
 
     return any(k in t for k in KEYWORDS)
 
-# ------------------------------
-# SCRAPER SIMPLE
-# ------------------------------
+# --------------------------
+# CODELCO SEARCH REAL
+# --------------------------
 
-def scrap_empresa(nombre, url):
+try:
+    url = "https://empleos.codelco.cl/search/?q="
+    r = requests.get(url, headers=HEADERS, timeout=20)
+    soup = BeautifulSoup(r.text, "html.parser")
 
-    try:
-        r = requests.get(url, headers=HEADERS, timeout=20)
-        soup = BeautifulSoup(r.text, "html.parser")
+    for link in soup.find_all("a", href=True):
 
-        for link in soup.find_all("a"):
+        titulo = link.get_text(strip=True)
+        href = link["href"]
 
-            titulo = link.get_text(strip=True)
-            href = link.get("href")
+        if "/job/" not in href:
+            continue
 
-            if not href or not titulo:
-                continue
+        if not cumple(titulo):
+            continue
 
-            if "/job" not in href.lower():
-                continue
+        link_completo = "https://empleos.codelco.cl" + href
 
-            if not cumple(titulo):
-                continue
+        if link_completo in historial:
+            continue
 
-            if href.startswith("/"):
-                link_completo = url.rstrip("/") + href
-            else:
-                link_completo = href
+        nuevos.append(f"{titulo}\nCodelco\n{link_completo}")
+        historial.append(link_completo)
 
-            if link_completo in historial:
-                continue
+except Exception as e:
+    print("Error Codelco:", e)
 
-            nuevos.append(
-                f"{titulo}\n{nombre}\n{link_completo}"
-            )
+# --------------------------
+# KINROSS PROFESIONALES REAL
+# --------------------------
 
-            historial.append(link_completo)
+try:
+    url = "https://jobs.kinross.com/go/Puestos-para-profesionales"
+    r = requests.get(url, headers=HEADERS, timeout=20)
+    soup = BeautifulSoup(r.text, "html.parser")
 
-    except:
-        print(f"Error en {nombre}")
+    for link in soup.find_all("a", href=True):
 
-# ------------------------------
-# EJECUCION
-# ------------------------------
+        titulo = link.get_text(strip=True)
+        href = link["href"]
 
-for empresa, url in EMPRESAS.items():
-    scrap_empresa(empresa, url)
+        if "/job/" not in href:
+            continue
 
-# ------------------------------
+        if not cumple(titulo):
+            continue
+
+        if href.startswith("/"):
+            link_completo = "https://jobs.kinross.com" + href
+        else:
+            link_completo = href
+
+        if link_completo in historial:
+            continue
+
+        nuevos.append(f"{titulo}\nKinross\n{link_completo}")
+        historial.append(link_completo)
+
+except Exception as e:
+    print("Error Kinross:", e)
+
+# --------------------------
 # GUARDAR HISTORIAL
-# ------------------------------
+# --------------------------
 
 with open(ARCHIVO, "w") as f:
     json.dump(historial, f)
 
-# ------------------------------
+# --------------------------
 # TELEGRAM
-# ------------------------------
+# --------------------------
 
 if nuevos:
-    mensaje = "RADAR V26 BLACK BELT\n\n" + "\n\n".join(nuevos[:25])
+    mensaje = "RADAR V26.3 BLACK BELT\n\n" + "\n\n".join(nuevos[:25])
 else:
-    mensaje = "RADAR V26 BLACK BELT\n\nSin empleos nuevos compatibles"
+    mensaje = "RADAR V26.3 BLACK BELT\n\nSin empleos nuevos compatibles"
 
 requests.post(
     f"https://api.telegram.org/bot{TOKEN}/sendMessage",
@@ -151,4 +151,4 @@ requests.post(
     }
 )
 
-print("RADAR V26 FINALIZADO")
+print("RADAR V26.3 FINALIZADO")
