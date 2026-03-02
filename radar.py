@@ -2,13 +2,12 @@ import requests
 from bs4 import BeautifulSoup
 import os
 
-print("RADAR FREEPORT ACTIVO")
+print("RADAR COLLAHUASI ACTIVO")
 
 TOKEN = os.environ.get("TOKEN")
 CHAT_ID = os.environ.get("CHAT_ID")
 
-URL = "https://jobs.fcx.com/South-America/go/Oportunidades-Laborales-en-Chile/8009100/"
-BASE = "https://jobs.fcx.com"
+URL = "https://www.collahuasi.cl/trabaja-con-nosotros/ofertas-laborales/"
 
 headers = {
     "User-Agent": "Mozilla/5.0"
@@ -17,18 +16,28 @@ headers = {
 response = requests.get(URL, headers=headers)
 soup = BeautifulSoup(response.text, "html.parser")
 
-jobs = []
+# Buscamos elementos específicos de empleo: <h2>, <a>, o clase CSS
+empleos = []
 
-for job in soup.find_all("a", class_="jobTitle-link"):
-    title = job.get_text(strip=True)
-    link = BASE + job["href"]
-    location = job["href"].split("/")[3]  # ciudad viene en la URL
-    jobs.append(f"{title}\n{location}\n{link}\n")
+# Ejemplo: si el empleo está en un <h2> o en un <a> con texto relevante
+for tag in soup.find_all(["h2", "a"]):
+    texto = tag.get_text(strip=True)
 
-if len(jobs) == 0:
-    message = "Radar Freeport activo.\nNo se detectaron empleos."
+    # Filtramos por "Aprendiz" (para el programa de aprendices)
+    if "aprendiz" in texto.lower():
+        link = tag.get("href", "")
+
+        # Si es relativo, completemos la URL
+        if link and not link.startswith("http"):
+            link = "https://www.collahuasi.cl" + link
+
+        empleos.append(f"{texto}\n{link}")
+
+# Armar mensaje para Telegram
+if not empleos:
+    message = "Radar Collahuasi activo.\nNo se detectó el empleo de programa de aprendices."
 else:
-    message = f"🚨 FREEPORT ({len(jobs)}) 🚨\n\n" + "\n".join(jobs)
+    message = "🚨 COLLAHUASI - Empleo Detectado 🚨\n\n" + "\n\n".join(empleos)
 
 telegram_url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
 
