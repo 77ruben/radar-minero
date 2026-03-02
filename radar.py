@@ -1,7 +1,8 @@
 import requests
+from bs4 import BeautifulSoup
 import os
 
-print("INICIANDO RADAR BHP REAL")
+print("INICIANDO RADAR BHP HTML")
 
 TOKEN = os.environ.get("TOKEN")
 CHAT_ID = os.environ.get("CHAT_ID")
@@ -9,47 +10,45 @@ CHAT_ID = os.environ.get("CHAT_ID")
 if not TOKEN or not CHAT_ID:
     raise Exception("TOKEN o CHAT_ID no configurados")
 
-# Endpoint correcto actual Workday BHP
-URL = "https://bhp.wd3.myworkdayjobs.com/wday/cxs/bhp/BHP_Careers/jobs"
-
-payload = {
-    "limit": 100,
-    "offset": 0,
-    "searchText": ""
-}
+URL = "https://careers.bhp.com/search?location=chile"
 
 headers = {
-    "Content-Type": "application/json"
+    "User-Agent": "Mozilla/5.0"
 }
 
 try:
-    response = requests.post(URL, headers=headers, json=payload)
-    data = response.json()
+    response = requests.get(URL, headers=headers)
+    soup = BeautifulSoup(response.text, "html.parser")
 
-    jobs = data.get("jobPostings", [])
+    jobs = soup.find_all("a", href=True)
 
     message = ""
+    count = 0
 
     for job in jobs:
-        title = job.get("title", "")
-        location = job.get("locationsText", "")
-        external_path = job.get("externalPath", "")
+        href = job["href"]
 
-        if "Chile" in location:
-            link = f"https://bhp.wd3.myworkdayjobs.com/BHP_Careers/job/{external_path}"
-            message += f"{title}\n📍 {location}\n{link}\n\n"
+        if "/job/" in href:
+            title = job.text.strip()
+            link = "https://careers.bhp.com" + href
 
-    if message == "":
-        message = "Radar BHP activo.\nSe consultó correctamente, pero no se detectaron empleos en Chile."
+            if title:
+                message += f"{title}\n{link}\n\n"
+                count += 1
+
+    if count == 0:
+        message = "Radar BHP activo.\nNo se detectaron empleos en Chile (HTML visible)."
+    else:
+        message = f"🚨 EMPLEOS BHP CHILE DETECTADOS ({count}) 🚨\n\n" + message
 
     telegram_url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
 
-    payload_telegram = {
+    payload = {
         "chat_id": CHAT_ID,
-        "text": message
+        "text": message[:4000]  # límite Telegram
     }
 
-    r = requests.post(telegram_url, data=payload_telegram)
+    r = requests.post(telegram_url, data=payload)
 
     if r.status_code != 200:
         raise Exception("Error enviando mensaje a Telegram")
