@@ -1,7 +1,7 @@
 import requests
 import os
 
-print("INICIANDO RADAR BHP GLOBAL")
+print("INICIANDO RADAR BHP REAL")
 
 TOKEN = os.environ.get("TOKEN")
 CHAT_ID = os.environ.get("CHAT_ID")
@@ -9,10 +9,11 @@ CHAT_ID = os.environ.get("CHAT_ID")
 if not TOKEN or not CHAT_ID:
     raise Exception("TOKEN o CHAT_ID no configurados")
 
-URL = "https://bhp.wd3.myworkdayjobs.com/wday/cxs/bhp/BHP/jobs"
+# Endpoint correcto actual Workday BHP
+URL = "https://bhp.wd3.myworkdayjobs.com/wday/cxs/bhp/BHP_Careers/jobs"
 
 payload = {
-    "limit": 50,
+    "limit": 100,
     "offset": 0,
     "searchText": ""
 }
@@ -27,26 +28,19 @@ try:
 
     jobs = data.get("jobPostings", [])
 
-    chile_jobs = []
+    message = ""
 
     for job in jobs:
+        title = job.get("title", "")
         location = job.get("locationsText", "")
+        external_path = job.get("externalPath", "")
+
         if "Chile" in location:
-            chile_jobs.append(job)
-
-    if not chile_jobs:
-        message = "Radar BHP activo.\nNo se encontraron empleos en Chile en esta ejecución."
-    else:
-        message = "🚨 EMPLEOS BHP CHILE DETECTADOS 🚨\n\n"
-
-        for job in chile_jobs:
-            title = job.get("title")
-            location = job.get("locationsText")
-            external_path = job.get("externalPath")
-
-            link = f"https://bhp.wd3.myworkdayjobs.com/BHP/job/{external_path}"
-
+            link = f"https://bhp.wd3.myworkdayjobs.com/BHP_Careers/job/{external_path}"
             message += f"{title}\n📍 {location}\n{link}\n\n"
+
+    if message == "":
+        message = "Radar BHP activo.\nSe consultó correctamente, pero no se detectaron empleos en Chile."
 
     telegram_url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
 
