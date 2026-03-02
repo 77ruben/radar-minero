@@ -3,8 +3,7 @@ import asyncio
 from playwright.async_api import async_playwright
 import requests
 
-print("INICIANDO RADAR ANTOFAGASTA MINERALS (PLAYWRIGHT)")
-
+print("INICIANDO RADAR ANTOFAGASTA MINERALS (PLAYWRIGHT V2)")
 
 TOKEN = os.environ.get("TOKEN")
 CHAT_ID = os.environ.get("CHAT_ID")
@@ -20,23 +19,31 @@ async def run():
         page = await browser.new_page()
 
         await page.goto(URL, timeout=60000)
-        await page.wait_for_timeout(5000)
+        await page.wait_for_timeout(8000)
 
-        content = await page.content()
-
-        jobs = await page.query_selector_all("a.jobTitle")
+        # Buscar todos los links que contengan jobReqId
+        links = await page.query_selector_all("a[href*='jobReqId']")
 
         message = ""
         count = 0
+        seen = set()
 
-        for job in jobs:
-            title = await job.inner_text()
-            link = await job.get_attribute("href")
+        for link in links:
+            href = await link.get_attribute("href")
+            title = await link.inner_text()
 
-            if link and not link.startswith("http"):
-                link = "https://career8.successfactors.com" + link
+            if not href or href in seen:
+                continue
 
-            message += f"{title}\n{link}\n\n"
+            seen.add(href)
+
+            if not href.startswith("http"):
+                href = "https://career8.successfactors.com" + href
+
+            if title.strip() == "":
+                continue
+
+            message += f"{title.strip()}\n{href}\n\n"
             count += 1
 
         await browser.close()
@@ -53,6 +60,6 @@ async def run():
         "text": message[:4000]
     })
 
-    print("Radar ejecutado correctamente")
+    print(f"Se detectaron {count} empleos")
 
 asyncio.run(run())
