@@ -1,64 +1,27 @@
 import requests
-import os
+from bs4 import BeautifulSoup
 
-print("RADAR TECK ACTIVO")
-
-TOKEN = os.environ.get("TOKEN")
-CHAT_ID = os.environ.get("CHAT_ID")
-
-URL = "https://jobs.teck.com/services/recruiting/v1/jobs"
+URL = "https://jobs.fcx.com/South-America/go/Oportunidades-Laborales-en-Chile/8009100/"
 
 headers = {
-    "Content-Type": "application/json"
+    "User-Agent": "Mozilla/5.0"
 }
 
-payload = {
-    "locale": "es_ES",
-    "pageNumber": 0,
-    "sortBy": "",
-    "keywords": "",
-    "location": "",
-    "facetFilters": {},
-    "brand": "",
-    "categoryId": 0,
-    "alertId": "",
-    "rcmCandidateId": "",
-    "skills": []
-}
+response = requests.get(URL, headers=headers)
+soup = BeautifulSoup(response.text, "html.parser")
 
-response = requests.post(URL, json=payload, headers=headers)
+jobs = []
 
-message = ""
-count = 0
+for job in soup.find_all("a", class_="jobTitle-link"):
+    title = job.get_text(strip=True)
+    link = "https://jobs.fcx.com" + job["href"]
+    job_id = job["href"].split("/")[-2]
 
-if response.status_code == 200:
-    data = response.json()
+    jobs.append({
+        "id": job_id,
+        "title": title,
+        "link": link
+    })
 
-    jobs = data.get("jobSearchResult", [])
-    total = data.get("totalJobs", 0)
-
-    for item in jobs:
-        job = item.get("response", {})
-        title = job.get("unifiedStandardTitle")
-        location = job.get("jobLocationShort", [""])[0].replace("<br/>", "")
-        job_id = job.get("id")
-        url_title = job.get("urlTitle")
-
-        link = f"https://jobs.teck.com/job/{url_title}/{job_id}/es_ES"
-
-        message += f"{title}\n{location}\n{link}\n\n"
-        count += 1
-
-if count == 0:
-    message = "Radar Teck activo.\nNo se detectaron empleos."
-else:
-    message = f"🚨 TECK ({count}) 🚨\n\n" + message
-
-telegram_url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-
-requests.post(telegram_url, data={
-    "chat_id": CHAT_ID,
-    "text": message[:4000]
-})
-
-print("Proceso finalizado")
+for j in jobs:
+    print(j)
