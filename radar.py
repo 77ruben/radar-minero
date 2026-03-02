@@ -2,28 +2,32 @@ import os
 import asyncio
 from playwright.async_api import async_playwright
 import requests
-import json
 
-print("INICIANDO RADAR ANTOFAGASTA MINERALS (NETWORK MODE)")
+print("INICIANDO RADAR ANTOFAGASTA MINERALS (CLICK MODE)")
 
 TOKEN = os.environ.get("TOKEN")
 CHAT_ID = os.environ.get("CHAT_ID")
-
-if not TOKEN or not CHAT_ID:
-    raise Exception("TOKEN o CHAT_ID no configurados")
 
 URL = "https://career8.successfactors.com/career?company=AMSAP&career_ns=job_listing_summary&navBarLevel=JOB_SEARCH"
 
 async def run():
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
-        page = await browser.new_page()
+        browser = await p.chromium.launch(
+            headless=True,
+            args=["--disable-blink-features=AutomationControlled"]
+        )
+
+        context = await browser.new_context(
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115 Safari/537.36"
+        )
+
+        page = await context.new_page()
 
         jobs_data = None
 
         async def handle_response(response):
             nonlocal jobs_data
-            if "jobsearch" in response.url and response.status == 200:
+            if "jobsearch" in response.url and response.request.method == "POST":
                 try:
                     jobs_data = await response.json()
                 except:
@@ -32,8 +36,15 @@ async def run():
         page.on("response", handle_response)
 
         await page.goto(URL, timeout=60000)
-        await page.wait_for_timeout(10000)
+        await page.wait_for_timeout(5000)
 
+        # Forzar clic en botón Buscar
+        try:
+            await page.click("button")
+        except:
+            pass
+
+        await page.wait_for_timeout(10000)
         await browser.close()
 
     message = ""
@@ -47,7 +58,7 @@ async def run():
             location = job.get("location")
             job_id = job.get("jobReqId")
 
-            link = f"https://career8.successfactors.com/career?company=AMSAP&career_ns=job_listing_summary&navBarLevel=JOB_SEARCH&jobReqId={job_id}"
+            link = f"https://career8.successfactors.com/career?company=AMSAP&career_ns=job_listing_summary&jobReqId={job_id}"
 
             message += f"{title} - {location}\n{link}\n\n"
             count += 1
