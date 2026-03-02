@@ -14,7 +14,16 @@ headers = {
 
 payload = {
     "locale": "es_ES",
-    "pageNumber": 1
+    "pageNumber": 0,
+    "sortBy": "",
+    "keywords": "",
+    "location": "",
+    "facetFilters": {},
+    "brand": "",
+    "categoryId": 0,
+    "alertId": "",
+    "rcmCandidateId": "",
+    "skills": []
 }
 
 response = requests.post(URL, json=payload, headers=headers)
