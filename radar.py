@@ -2,7 +2,7 @@ import requests
 from bs4 import BeautifulSoup
 import os
 
-print("INICIANDO RADAR BHP HTML")
+print("INICIANDO RADAR ANTOFAGASTA MINERALS")
 
 TOKEN = os.environ.get("TOKEN")
 CHAT_ID = os.environ.get("CHAT_ID")
@@ -10,7 +10,7 @@ CHAT_ID = os.environ.get("CHAT_ID")
 if not TOKEN or not CHAT_ID:
     raise Exception("TOKEN o CHAT_ID no configurados")
 
-URL = "https://careers.bhp.com/search?location=chile"
+URL = "https://empleos.antofagasta.co.uk/search/?createNewAlert=false&q=&locationsearch=Chile"
 
 headers = {
     "User-Agent": "Mozilla/5.0"
@@ -30,22 +30,22 @@ try:
 
         if "/job/" in href:
             title = job.text.strip()
-            link = "https://careers.bhp.com" + href
+            link = "https://empleos.antofagasta.co.uk" + href
 
             if title:
                 message += f"{title}\n{link}\n\n"
                 count += 1
 
     if count == 0:
-        message = "Radar BHP activo.\nNo se detectaron empleos en Chile (HTML visible)."
+        message = "Radar AM activo.\nNo se detectaron empleos en Chile."
     else:
-        message = f"🚨 EMPLEOS BHP CHILE DETECTADOS ({count}) 🚨\n\n" + message
+        message = f"🚨 EMPLEOS ANTOFAGASTA MINERALS ({count}) 🚨\n\n" + message
 
     telegram_url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
 
     payload = {
         "chat_id": CHAT_ID,
-        "text": message[:4000]  # límite Telegram
+        "text": message[:4000]
     }
 
     r = requests.post(telegram_url, data=payload)
