@@ -1,5 +1,4 @@
 import requests
-from bs4 import BeautifulSoup
 import os
 
 print("INICIANDO RADAR ANTOFAGASTA MINERALS")
@@ -10,51 +9,53 @@ CHAT_ID = os.environ.get("CHAT_ID")
 if not TOKEN or not CHAT_ID:
     raise Exception("TOKEN o CHAT_ID no configurados")
 
-URL = "https://jobs.aminerals.cl/"
+url = "https://career8.successfactors.com/career/jobsearch/search"
 
 headers = {
-    "User-Agent": "Mozilla/5.0"
+    "Content-Type": "application/json"
 }
 
-try:
-    response = requests.get(URL, headers=headers)
-    soup = BeautifulSoup(response.text, "html.parser")
-
-    jobs = soup.find_all("a", href=True)
-
-    message = ""
-    count = 0
-
-    for job in jobs:
-        href = job["href"]
-
-        if "/job/" in href:
-            title = job.text.strip()
-            link = "https://jobs.aminerals.cl" + href
-
-            if title:
-                message += f"{title}\n{link}\n\n"
-                count += 1
-
-    if count == 0:
-        message = "Radar Antofagasta Minerals activo.\nNo se detectaron empleos."
-    else:
-        message = f"🚨 EMPLEOS ANTOFAGASTA MINERALS ({count}) 🚨\n\n" + message
-
-    telegram_url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-
-    payload = {
-        "chat_id": CHAT_ID,
-        "text": message[:4000]
+payload = {
+    "company": "AMSAP",
+    "locale": "es_ES",
+    "searchParams": {
+        "pageSize": 50,
+        "pageNumber": 1
     }
+}
 
-    r = requests.post(telegram_url, data=payload)
+response = requests.post(url, json=payload, headers=headers)
 
-    if r.status_code != 200:
-        raise Exception("Error enviando mensaje a Telegram")
+if response.status_code != 200:
+    raise Exception("Error consultando SuccessFactors")
 
-    print("Radar ejecutado correctamente")
+data = response.json()
 
-except Exception as e:
-    print("ERROR:", e)
-    raise
+jobs = data.get("jobSearchResult", {}).get("results", [])
+
+message = ""
+count = 0
+
+for job in jobs:
+    title = job.get("jobTitle")
+    location = job.get("location")
+    job_id = job.get("jobReqId")
+
+    link = f"https://career8.successfactors.com/career?company=AMSAP&career_ns=job_listing_summary&navBarLevel=JOB_SEARCH&rcm_site_locale=es_ES&jobReqId={job_id}"
+
+    message += f"{title}\n{location}\n{link}\n\n"
+    count += 1
+
+if count == 0:
+    message = "Radar Antofagasta Minerals activo.\nNo se detectaron empleos."
+else:
+    message = f"🚨 EMPLEOS ANTOFAGASTA MINERALS ({count}) 🚨\n\n" + message
+
+telegram_url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+
+requests.post(telegram_url, data={
+    "chat_id": CHAT_ID,
+    "text": message[:4000]
+})
+
+print("Radar ejecutado correctamente")
