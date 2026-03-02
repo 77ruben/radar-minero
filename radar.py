@@ -1,23 +1,55 @@
-import asyncio
-from playwright.async_api import async_playwright
+import requests
+import os
 
-print("DIAGNOSTICO ANGLO AMERICAN")
+print("RADAR TECK ACTIVO")
 
-URL = "https://www.angloamerican.com/careers/job-opportunities/apply"
+TOKEN = os.environ.get("TOKEN")
+CHAT_ID = os.environ.get("CHAT_ID")
 
-async def run():
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
-        page = await browser.new_page()
+URL = "https://jobs.teck.com/services/recruiting/v1/jobs"
 
-        await page.goto(URL, timeout=60000)
-        await page.wait_for_timeout(8000)
+headers = {
+    "Content-Type": "application/json"
+}
 
-        print("\nFRAMES DETECTADOS:\n")
+payload = {
+    "locale": "es_ES",
+    "pageNumber": 1
+}
 
-        for frame in page.frames:
-            print(frame.url)
+response = requests.post(URL, json=payload, headers=headers)
 
-        await browser.close()
+message = ""
+count = 0
 
-asyncio.run(run())
+if response.status_code == 200:
+    data = response.json()
+
+    jobs = data.get("jobSearchResult", [])
+    total = data.get("totalJobs", 0)
+
+    for item in jobs:
+        job = item.get("response", {})
+        title = job.get("unifiedStandardTitle")
+        location = job.get("jobLocationShort", [""])[0].replace("<br/>", "")
+        job_id = job.get("id")
+        url_title = job.get("urlTitle")
+
+        link = f"https://jobs.teck.com/job/{url_title}/{job_id}/es_ES"
+
+        message += f"{title}\n{location}\n{link}\n\n"
+        count += 1
+
+if count == 0:
+    message = "Radar Teck activo.\nNo se detectaron empleos."
+else:
+    message = f"🚨 TECK ({count}) 🚨\n\n" + message
+
+telegram_url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+
+requests.post(telegram_url, data={
+    "chat_id": CHAT_ID,
+    "text": message[:4000]
+})
+
+print("Proceso finalizado")
