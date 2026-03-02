@@ -21,6 +21,11 @@ jobs:
       - name: Install dependencies
         run: pip install requests beautifulsoup4
 
+        - name: Install Playwright
+  run: |
+    pip install playwright
+    playwright install --with-deps
+
       - name: Ejecutar Radar
         env:
           TOKEN: ${{ secrets.TOKEN }}
