@@ -5,6 +5,7 @@ import requests
 
 print("INICIANDO RADAR ANTOFAGASTA MINERALS (PLAYWRIGHT)")
 
+
 TOKEN = os.environ.get("TOKEN")
 CHAT_ID = os.environ.get("CHAT_ID")
 
