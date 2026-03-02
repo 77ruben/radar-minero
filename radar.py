@@ -2,8 +2,9 @@ import os
 import asyncio
 from playwright.async_api import async_playwright
 import requests
+import json
 
-print("INICIANDO RADAR ANTOFAGASTA MINERALS (PLAYWRIGHT V2)")
+print("INICIANDO RADAR ANTOFAGASTA MINERALS (NETWORK MODE)")
 
 TOKEN = os.environ.get("TOKEN")
 CHAT_ID = os.environ.get("CHAT_ID")
@@ -18,35 +19,38 @@ async def run():
         browser = await p.chromium.launch(headless=True)
         page = await browser.new_page()
 
+        jobs_data = None
+
+        async def handle_response(response):
+            nonlocal jobs_data
+            if "jobsearch" in response.url and response.status == 200:
+                try:
+                    jobs_data = await response.json()
+                except:
+                    pass
+
+        page.on("response", handle_response)
+
         await page.goto(URL, timeout=60000)
-        await page.wait_for_timeout(8000)
-
-        # Buscar todos los links que contengan jobReqId
-        links = await page.query_selector_all("a[href*='jobReqId']")
-
-        message = ""
-        count = 0
-        seen = set()
-
-        for link in links:
-            href = await link.get_attribute("href")
-            title = await link.inner_text()
-
-            if not href or href in seen:
-                continue
-
-            seen.add(href)
-
-            if not href.startswith("http"):
-                href = "https://career8.successfactors.com" + href
-
-            if title.strip() == "":
-                continue
-
-            message += f"{title.strip()}\n{href}\n\n"
-            count += 1
+        await page.wait_for_timeout(10000)
 
         await browser.close()
+
+    message = ""
+    count = 0
+
+    if jobs_data and "jobSearchResult" in jobs_data:
+        results = jobs_data["jobSearchResult"].get("results", [])
+
+        for job in results:
+            title = job.get("jobTitle")
+            location = job.get("location")
+            job_id = job.get("jobReqId")
+
+            link = f"https://career8.successfactors.com/career?company=AMSAP&career_ns=job_listing_summary&navBarLevel=JOB_SEARCH&jobReqId={job_id}"
+
+            message += f"{title} - {location}\n{link}\n\n"
+            count += 1
 
     if count == 0:
         message = "Radar Antofagasta Minerals activo.\nNo se detectaron empleos."
