@@ -10,7 +10,7 @@ CHAT_ID = os.environ.get("CHAT_ID")
 if not TOKEN or not CHAT_ID:
     raise Exception("TOKEN o CHAT_ID no configurados")
 
-URL = "https://empleos.antofagasta.co.uk/search/?createNewAlert=false&q=&locationsearch=Chile"
+URL = "https://jobs.aminerals.cl/"
 
 headers = {
     "User-Agent": "Mozilla/5.0"
@@ -30,14 +30,14 @@ try:
 
         if "/job/" in href:
             title = job.text.strip()
-            link = "https://empleos.antofagasta.co.uk" + href
+            link = "https://jobs.aminerals.cl" + href
 
             if title:
                 message += f"{title}\n{link}\n\n"
                 count += 1
 
     if count == 0:
-        message = "Radar AM activo.\nNo se detectaron empleos en Chile."
+        message = "Radar Antofagasta Minerals activo.\nNo se detectaron empleos."
     else:
         message = f"🚨 EMPLEOS ANTOFAGASTA MINERALS ({count}) 🚨\n\n" + message
 
