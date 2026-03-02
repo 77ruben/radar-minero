@@ -1,7 +1,9 @@
-import requests
 import os
+import asyncio
+from playwright.async_api import async_playwright
+import requests
 
-print("INICIANDO RADAR ANTOFAGASTA MINERALS")
+print("INICIANDO RADAR ANTOFAGASTA MINERALS (PLAYWRIGHT)")
 
 TOKEN = os.environ.get("TOKEN")
 CHAT_ID = os.environ.get("CHAT_ID")
@@ -9,54 +11,47 @@ CHAT_ID = os.environ.get("CHAT_ID")
 if not TOKEN or not CHAT_ID:
     raise Exception("TOKEN o CHAT_ID no configurados")
 
-url = "https://career8.successfactors.com/career/jobsearch/search"
+URL = "https://career8.successfactors.com/career?company=AMSAP&career_ns=job_listing_summary&navBarLevel=JOB_SEARCH"
 
-params = {
-    "company": "AMSAP",
-    "locale": "es_ES",
-    "pageSize": "50",
-    "pageNumber": "1"
-}
+async def run():
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True)
+        page = await browser.new_page()
 
-headers = {
-    "User-Agent": "Mozilla/5.0",
-    "Accept": "application/json"
-}
+        await page.goto(URL, timeout=60000)
+        await page.wait_for_timeout(5000)
 
-response = requests.get(url, params=params, headers=headers)
+        content = await page.content()
 
-print("Status code:", response.status_code)
+        jobs = await page.query_selector_all("a.jobTitle")
 
-if response.status_code != 200:
-    raise Exception(f"Error HTTP {response.status_code}")
+        message = ""
+        count = 0
 
-data = response.json()
+        for job in jobs:
+            title = await job.inner_text()
+            link = await job.get_attribute("href")
 
-jobs = data.get("jobSearchResult", {}).get("results", [])
+            if link and not link.startswith("http"):
+                link = "https://career8.successfactors.com" + link
 
-message = ""
-count = 0
+            message += f"{title}\n{link}\n\n"
+            count += 1
 
-for job in jobs:
-    title = job.get("jobTitle")
-    location = job.get("location")
-    job_id = job.get("jobReqId")
+        await browser.close()
 
-    link = f"https://career8.successfactors.com/career?company=AMSAP&career_ns=job_listing_summary&navBarLevel=JOB_SEARCH&jobReqId={job_id}"
+    if count == 0:
+        message = "Radar Antofagasta Minerals activo.\nNo se detectaron empleos."
+    else:
+        message = f"🚨 EMPLEOS ANTOFAGASTA MINERALS ({count}) 🚨\n\n" + message
 
-    message += f"{title}\n{location}\n{link}\n\n"
-    count += 1
+    telegram_url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
 
-if count == 0:
-    message = "Radar Antofagasta Minerals activo.\nNo se detectaron empleos."
-else:
-    message = f"🚨 EMPLEOS ANTOFAGASTA MINERALS ({count}) 🚨\n\n" + message
+    requests.post(telegram_url, data={
+        "chat_id": CHAT_ID,
+        "text": message[:4000]
+    })
 
-telegram_url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+    print("Radar ejecutado correctamente")
 
-requests.post(telegram_url, data={
-    "chat_id": CHAT_ID,
-    "text": message[:4000]
-})
-
-print("Radar ejecutado correctamente")
+asyncio.run(run())
