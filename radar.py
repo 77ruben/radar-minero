@@ -11,23 +11,24 @@ if not TOKEN or not CHAT_ID:
 
 url = "https://career8.successfactors.com/career/jobsearch/search"
 
-headers = {
-    "Content-Type": "application/json"
-}
-
-payload = {
+params = {
     "company": "AMSAP",
     "locale": "es_ES",
-    "searchParams": {
-        "pageSize": 50,
-        "pageNumber": 1
-    }
+    "pageSize": "50",
+    "pageNumber": "1"
 }
 
-response = requests.post(url, json=payload, headers=headers)
+headers = {
+    "User-Agent": "Mozilla/5.0",
+    "Accept": "application/json"
+}
+
+response = requests.get(url, params=params, headers=headers)
+
+print("Status code:", response.status_code)
 
 if response.status_code != 200:
-    raise Exception("Error consultando SuccessFactors")
+    raise Exception(f"Error HTTP {response.status_code}")
 
 data = response.json()
 
@@ -41,7 +42,7 @@ for job in jobs:
     location = job.get("location")
     job_id = job.get("jobReqId")
 
-    link = f"https://career8.successfactors.com/career?company=AMSAP&career_ns=job_listing_summary&navBarLevel=JOB_SEARCH&rcm_site_locale=es_ES&jobReqId={job_id}"
+    link = f"https://career8.successfactors.com/career?company=AMSAP&career_ns=job_listing_summary&navBarLevel=JOB_SEARCH&jobReqId={job_id}"
 
     message += f"{title}\n{location}\n{link}\n\n"
     count += 1
