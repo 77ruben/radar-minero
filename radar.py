@@ -2,7 +2,7 @@ import requests
 from bs4 import BeautifulSoup
 import os
 
-print("RADAR LUNDIN MINING — CHILE FILTRADO REAL")
+print("RADAR LUNDIN MINING — CHILE DEFINITIVO")
 
 TOKEN = os.environ["TOKEN"]
 CHAT_ID = os.environ["CHAT_ID"]
@@ -37,21 +37,19 @@ def obtener_empleos_lundin():
         nuevos = 0
 
         for job in jobs:
+            texto_completo = job.get_text(" ", strip=True)
+
+            # FILTRO REAL CHILE
+            if ", CL" not in texto_completo:
+                continue
+
             titulo_tag = job.find("a", class_="jobTitle-link")
-            location_tag = job.find("span", class_="jobLocation")
 
-            if titulo_tag and location_tag:
-
-                ubicacion = location_tag.text.strip()
-
-                # FILTRO REAL CHILE
-                if ", CL" not in ubicacion:
-                    continue
-
+            if titulo_tag:
                 titulo = titulo_tag.text.strip()
                 link = BASE_URL + titulo_tag["href"]
 
-                registro = f"{titulo}\n{ubicacion}\n{link}"
+                registro = f"{titulo}\n{link}"
 
                 if registro not in empleos:
                     empleos.append(registro)
