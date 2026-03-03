@@ -2,46 +2,60 @@ import requests
 from bs4 import BeautifulSoup
 import os
 
-print("RADAR COLLAHUASI ACTIVO")
+print("RADAR LUNDIN MINING — CHILE")
 
-TOKEN = os.environ.get("TOKEN")
-CHAT_ID = os.environ.get("CHAT_ID")
+TOKEN = os.environ["TOKEN"]
+CHAT_ID = os.environ["CHAT_ID"]
 
-URL = "https://www.collahuasi.cl/trabaja-con-nosotros/ofertas-laborales/"
-BASE = "https://www.collahuasi.cl"
-
-headers = {
+HEADERS = {
     "User-Agent": "Mozilla/5.0"
 }
 
-response = requests.get(URL, headers=headers)
-soup = BeautifulSoup(response.text, "html.parser")
+BASE_URL = "https://jobs.lundinmining.com"
+SEARCH_URL = BASE_URL + "/tile-search-results/?q=&locationsearch=Chile&startrow={}"
 
-empleos = []
+def obtener_empleos_lundin():
+    empleos = []
+    startrow = 0
+    step = 25
 
-# Buscar enlaces que contengan "programa-aprendices"
-for link in soup.find_all("a", href=True):
-    href = link["href"]
+    while True:
+        url = SEARCH_URL.format(startrow)
+        response = requests.get(url, headers=HEADERS)
+        
+        if response.status_code != 200:
+            break
 
-    if "programa-aprendices" in href:
-        titulo = link.get_text(strip=True)
+        soup = BeautifulSoup(response.text, "html.parser")
+        jobs = soup.find_all("li", class_="job-tile")
 
-        # Si el link es relativo, completarlo
-        if not href.startswith("http"):
-            href = BASE + href
+        if not jobs:
+            break
 
-        empleos.append(f"{titulo}\n{href}")
+        for job in jobs:
+            titulo_tag = job.find("a", class_="jobTitle-link")
+            if titulo_tag:
+                titulo = titulo_tag.text.strip()
+                link = BASE_URL + titulo_tag["href"]
+                empleos.append(f"{titulo}\n{link}")
 
-if not empleos:
-    message = "Radar Collahuasi activo.\nNo se detectaron programas de aprendices."
+        startrow += step
+
+    return empleos
+
+
+empleos = obtener_empleos_lundin()
+
+if empleos:
+    mensaje = "🚨 LUNDIN MINING (Chile) 🚨\n\n"
+    mensaje += "\n\n".join(empleos)
+
+    requests.post(
+        f"https://api.telegram.org/bot{TOKEN}/sendMessage",
+        data={"chat_id": CHAT_ID, "text": mensaje}
+    )
+
+    print("Enviado a Telegram correctamente.")
+
 else:
-    message = "🚨 COLLAHUASI 🚨\n\n" + "\n\n".join(empleos)
-
-telegram_url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-
-requests.post(telegram_url, data={
-    "chat_id": CHAT_ID,
-    "text": message[:4000]
-})
-
-print("Proceso finalizado")
+    print("Sin empleos detectados en Lundin Chile.")
