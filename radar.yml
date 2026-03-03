@@ -1,4 +1,5 @@
-- name: Verificar Playwright
+- name: Instalar Librerías
   run: |
-    python -m playwright install chromium --with-deps
-    python -c "from playwright.sync_api import sync_playwright; p = sync_playwright().start(); b = p.chromium.launch(); print('✅ Chromium OK'); b.close(); p.stop()"
+    python -m pip install --upgrade pip
+    pip install -r requirements.txt
+    pip install selenium
