@@ -18,11 +18,13 @@ def obtener_empleos_lundin():
     empleos = []
     startrow = 0
     step = 25
+    max_paginas = 3   # seguridad anti loop infinito
 
-    while True:
+    for _ in range(max_paginas):
+
         url = SEARCH_URL.format(startrow)
         response = requests.get(url, headers=HEADERS)
-        
+
         if response.status_code != 200:
             break
 
@@ -32,12 +34,22 @@ def obtener_empleos_lundin():
         if not jobs:
             break
 
+        nuevos = 0
+
         for job in jobs:
             titulo_tag = job.find("a", class_="jobTitle-link")
             if titulo_tag:
                 titulo = titulo_tag.text.strip()
                 link = BASE_URL + titulo_tag["href"]
-                empleos.append(f"{titulo}\n{link}")
+
+                registro = f"{titulo}\n{link}"
+
+                if registro not in empleos:
+                    empleos.append(registro)
+                    nuevos += 1
+
+        if nuevos == 0:
+            break
 
         startrow += step
 
