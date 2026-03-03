@@ -2,7 +2,7 @@ import requests
 from bs4 import BeautifulSoup
 import os
 
-print("RADAR LUNDIN MINING — CHILE DEFINITIVO")
+print("RADAR KINROSS GOLD — CHILE")
 
 TOKEN = os.environ["TOKEN"]
 CHAT_ID = os.environ["CHAT_ID"]
@@ -11,62 +11,48 @@ HEADERS = {
     "User-Agent": "Mozilla/5.0"
 }
 
-BASE_URL = "https://jobs.lundinmining.com"
-SEARCH_URL = BASE_URL + "/tile-search-results/?q=&startrow={}"
+URL = "https://jobs.kinross.com/search/?createNewAlert=false&q=&locationsearch=Chile+"
 
-def obtener_empleos_lundin():
+def obtener_empleos_kinross():
     empleos = []
-    startrow = 0
-    step = 25
-    max_paginas = 3
 
-    for _ in range(max_paginas):
+    response = requests.get(URL, headers=HEADERS)
 
-        url = SEARCH_URL.format(startrow)
-        response = requests.get(url, headers=HEADERS)
+    if response.status_code != 200:
+        print("Error al conectar con Kinross")
+        return empleos
 
-        if response.status_code != 200:
-            break
+    soup = BeautifulSoup(response.text, "html.parser")
 
-        soup = BeautifulSoup(response.text, "html.parser")
-        jobs = soup.find_all("li", class_="job-tile")
+    # Los empleos vienen en filas tipo job-result
+    jobs = soup.find_all("tr", class_="data-row")
 
-        if not jobs:
-            break
+    for job in jobs:
 
-        nuevos = 0
+        titulo_tag = job.find("a")
 
-        for job in jobs:
+        if titulo_tag:
+            titulo = titulo_tag.text.strip()
+            link = "https://jobs.kinross.com" + titulo_tag["href"]
+
             texto_completo = job.get_text(" ", strip=True)
 
-            # FILTRO REAL CHILE
-            if ", CL" not in texto_completo:
+            # Filtro real Chile
+            if "Chile" not in texto_completo:
                 continue
 
-            titulo_tag = job.find("a", class_="jobTitle-link")
+            registro = f"{titulo}\n{link}"
 
-            if titulo_tag:
-                titulo = titulo_tag.text.strip()
-                link = BASE_URL + titulo_tag["href"]
-
-                registro = f"{titulo}\n{link}"
-
-                if registro not in empleos:
-                    empleos.append(registro)
-                    nuevos += 1
-
-        if nuevos == 0:
-            break
-
-        startrow += step
+            if registro not in empleos:
+                empleos.append(registro)
 
     return empleos
 
 
-empleos = obtener_empleos_lundin()
+empleos = obtener_empleos_kinross()
 
 if empleos:
-    mensaje = "🚨 LUNDIN MINING (Chile) 🚨\n\n"
+    mensaje = "🚨 KINROSS GOLD (Chile) 🚨\n\n"
     mensaje += "\n\n".join(empleos)
 
     requests.post(
@@ -77,4 +63,4 @@ if empleos:
     print("Enviado a Telegram correctamente.")
 
 else:
-    print("Sin empleos detectados en Lundin Chile.")
+    print("Sin empleos detectados en Kinross Chile.")
