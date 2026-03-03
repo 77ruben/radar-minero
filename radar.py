@@ -1,103 +1,222 @@
 import requests
+import os
+import json
 import re
 import time
+from datetime import datetime
 
-BASE_URL   = "https://career8.successfactors.com"
-CAREER_URL = f"{BASE_URL}/career?company=AMSAP&career_ns=job_listing_summary&navBarLevel=JOB_SEARCH"
-DWR_URL    = f"{BASE_URL}/xi/ajax/remoting/call/plaincall/careerJobSearchControllerProxy.getInitialJobSearchData.dwr"
+TOKEN      = os.environ["TOKEN"]
+CHAT_ID    = os.environ["CHAT_ID"]
+GEMINI_KEY = os.environ.get("GEMINI_KEY", "")
 
-session = requests.Session()
-session.headers.update({
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36",
-    "Accept-Language": "es-ES,es;q=0.9",
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-})
+TELEGRAM_URL   = f"https://api.telegram.org/bot{TOKEN}"
+SEEN_FILE      = "seen_jobs.json"
+MEMORIA_FILE   = "memoria.json"
+HISTORIAL_FILE = "historial.json"
 
-# Paso 1: obtener página principal
-print("🔄 Paso 1: cargando página...")
-r1 = session.get(CAREER_URL, timeout=30)
-print(f"   Status: {r1.status_code}")
-print(f"   Cookies: {dict(session.cookies)}")
-
-# Buscar scriptSessionId en el HTML
-patterns = [
-    r'BATCH_ID\s*=\s*["\']?(\w+)',
-    r'scriptSessionId["\s=:]+([A-F0-9]{30,})',
-    r'dwr\.engine\.setSessionId\(["\']([^"\']+)',
-    r'dwr\.engine\._sessionId\s*=\s*["\']([^"\']+)',
-    r'"sessionId"\s*:\s*"([^"]+)"',
-]
-
-print("\n🔍 Buscando scriptSessionId en el HTML...")
-found = False
-for pat in patterns:
-    m = re.search(pat, r1.text, re.IGNORECASE)
-    if m:
-        print(f"   ✅ Encontrado con patrón '{pat}': {m.group(1)}")
-        found = True
-
-if not found:
-    print("   ❌ No encontrado en HTML")
-
-# Buscar cualquier referencia a DWR en el HTML
-dwr_refs = re.findall(r'(dwr[^\s"\'<>]{0,80})', r1.text, re.IGNORECASE)
-print(f"\n🔍 Referencias DWR en HTML ({len(dwr_refs)} encontradas):")
-for ref in dwr_refs[:10]:
-    print(f"   {ref}")
-
-# Paso 2: intentar cargar el JS de DWR para obtener el sessionId
-print("\n🔄 Paso 2: cargando engine.js de DWR...")
-engine_urls = [
-    f"{BASE_URL}/xi/ajax/remoting/util/dwr/engine.js",
-    f"{BASE_URL}/dwr/engine.js",
-    f"{BASE_URL}/xi/dwr/engine.js",
-]
-for url in engine_urls:
+def cargar_json(file, default):
     try:
-        r = session.get(url, timeout=10)
-        if r.status_code == 200 and len(r.text) > 100:
-            print(f"   ✅ engine.js encontrado en: {url} ({len(r.text)} chars)")
-            # Buscar sessionId en el engine
-            m = re.search(r'sessionId["\s=:]+([A-F0-9]{20,})', r.text)
-            if m:
-                print(f"   scriptSessionId: {m.group(1)}")
-            break
-        else:
-            print(f"   ❌ {url} → {r.status_code}")
+        with open(file, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except:
+        return default
+
+def guardar_json(file, data):
+    with open(file, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+
+# ── SCRAPER ANGLO AMERICAN (API directa) ────────────────────────────
+def fetch_anglo_jobs():
+    url = "https://www.angloamerican.com/site-services/search-and-apply-data-fetch"
+    params = {
+        "aadata": "get-search-jobs", "languageCode": "en-GB",
+        "workType": "", "businessUnitOrGroupFunction": "",
+        "discipline": "", "experience": "",
+        "searchText": "", "city": "", "country": "chile"
+    }
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "application/json",
+        "Referer": "https://www.angloamerican.com/careers/job-opportunities",
+    }
+    try:
+        r = requests.get(url, params=params, headers=headers, timeout=30)
+        r.raise_for_status()
+        jobs = []
+        for item in r.json().get("jobs", []):
+            loc = item.get("location", {})
+            job_id = item.get("id") or item.get("jobId") or item.get("uuid", "")
+            jobs.append({
+                "id": f"aa_{job_id}",
+                "title": item.get("jobTitle", "Sin título"),
+                "date": item.get("releasedDate", "")[:10] if item.get("releasedDate") else "N/A",
+                "closing": item.get("closingDate", "N/A"),
+                "ciudad": loc.get("city", "Chile"),
+                "faena": loc.get("address", ""),
+                "url": item.get("applyUrl", "https://www.angloamerican.com/careers/job-opportunities"),
+                "empresa": "Anglo American",
+            })
+        print(f"✅ Anglo American: {len(jobs)} empleos encontrados")
+        return jobs
     except Exception as e:
-        print(f"   ❌ {url} → {e}")
+        print(f"❌ Error Anglo American: {e}")
+        return []
 
-# Paso 3: intentar llamada DWR con httpSessionId de la cookie JSESSIONID
-jsessionid = session.cookies.get("JSESSIONID", "")
-script_id  = re.sub(r'[^A-F0-9]', '', jsessionid.upper())[:32] + "8" if jsessionid else f"{int(time.time()*1000)}8"
+# ── SCRAPER ANTOFAGASTA MINERALS (Playwright + DWR) ─────────────────
+def fetch_amsa_jobs():
+    try:
+        from playwright.sync_api import sync_playwright
 
-print(f"\n🔄 Paso 3: llamando DWR con scriptSessionId derivado de JSESSIONID...")
-print(f"   JSESSIONID: {jsessionid}")
-print(f"   scriptSessionId: {script_id}")
+        CAREER_URL    = "https://career8.successfactors.com/career?company=AMSAP&career_ns=job_listing_summary&navBarLevel=JOB_SEARCH"
+        DETAIL_PREFIX = "https://career8.successfactors.com/career?career_ns=job_listing&company=AMSAP&navBarLevel=JOB_SEARCH&rcm_site_locale=es_ES&career_job_req_id="
 
-session.headers.update({
-    "Content-Type": "text/plain",
-    "Origin": BASE_URL,
-    "Referer": CAREER_URL,
-})
+        dwr_response_text = None
 
-payload = (
-    "callCount=1\n"
-    f"page={CAREER_URL}\n"
-    f"httpSessionId={jsessionid}\n"
-    f"scriptSessionId={script_id}\n"
-    "c0-scriptName=careerJobSearchControllerProxy\n"
-    "c0-methodName=getInitialJobSearchData\n"
-    "c0-id=0\n"
-    "c0-e1=string:\n"
-    "c0-e2=string:\n"
-    "c0-e3=string:\n"
-    "c0-e4=string:America%2FSantiago\n"
-    "c0-param0=Object_Object:{filterOnly:reference:c0-e1, jobAlertId:reference:c0-e2, returnToList:reference:c0-e3, browserTimeZone:reference:c0-e4}\n"
-    "batchId=0\n"
-)
+        def intercept_response(response):
+            nonlocal dwr_response_text
+            if "getInitialJobSearchData" in response.url:
+                try:
+                    dwr_response_text = response.text()
+                    print(f"   ✅ DWR interceptado: {len(dwr_response_text)} chars")
+                except:
+                    pass
 
-r3 = session.post(DWR_URL, data=payload, timeout=30)
-print(f"\n   Status: {r3.status_code}")
-print(f"📄 Respuesta (primeros 500 chars):")
-print(r3.text[:500])
+        with sync_playwright() as p:
+            browser = p.chromium.launch(
+                headless=True,
+                args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"]
+            )
+            context = browser.new_context(
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36",
+                locale="es-ES",
+                timezone_id="America/Santiago"
+            )
+            page = context.new_page()
+            page.on("response", intercept_response)
+
+            print("   🌐 Cargando portal AMSA con Playwright...")
+            page.goto(CAREER_URL, wait_until="networkidle", timeout=60000)
+            page.wait_for_timeout(5000)
+            browser.close()
+
+        if not dwr_response_text:
+            print("❌ AMSA: No se interceptó respuesta DWR")
+            return []
+
+        # Parsear respuesta DWR
+        titles = {m.group(1): m.group(2) for m in re.finditer(r'(s\d+)\.title\s*=\s*"([^"]+)"', dwr_response_text)}
+        ids    = {m.group(1): m.group(2) for m in re.finditer(r'(s\d+)\.id\s*=\s*(\d+)', dwr_response_text)}
+        dates  = {m.group(1): m.group(2) for m in re.finditer(r'(s\d+)\.postingDate\s*=\s*"([^"]+)"', dwr_response_text)}
+
+        jobs = []
+        for var in set(titles.keys()) & set(ids.keys()):
+            title = titles[var]
+            try:
+                title = title.encode('raw_unicode_escape').decode('unicode_escape')
+            except:
+                pass
+            jobs.append({
+                "id": f"amsa_{ids[var]}",
+                "title": title,
+                "date": dates.get(var, "N/A").replace("\\/", "/"),
+                "closing": "N/A",
+                "ciudad": "Chile",
+                "faena": "Antofagasta Minerals",
+                "url": DETAIL_PREFIX + ids[var],
+                "empresa": "Antofagasta Minerals",
+            })
+
+        jobs.sort(key=lambda x: x["date"], reverse=True)
+        print(f"✅ Antofagasta Minerals: {len(jobs)} empleos encontrados")
+        return jobs
+
+    except Exception as e:
+        print(f"❌ Error AMSA Playwright: {e}")
+        return []
+
+# ── GEMINI IA ────────────────────────────────────────────────────────
+def analizar_con_gemini(job, memoria):
+    if not GEMINI_KEY:
+        return None
+    prompt = f"""Analiza esta oferta minera en Chile y decide si es relevante.
+OFERTA: {job['title']} | {job['empresa']} | {job['faena']} {job['ciudad']} | Cierra: {job['closing']}
+PREFERENCIAS: turnos_buenos={memoria.get('turnos_buenos',[])} empresas_malas={memoria.get('empresas_malas',[])} ciudades_malas={memoria.get('ciudades_malas',[])} rechazados={memoria.get('rechazados',[])[-5:]} aceptados={memoria.get('aceptados',[])[-5:]}
+Responde SOLO con JSON sin markdown: {{"relevante": true, "razon": "texto corto"}}"""
+    try:
+        r = requests.post(
+            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_KEY}",
+            json={"contents": [{"parts": [{"text": prompt}]}]},
+            timeout=20
+        )
+        text = r.json()["candidates"][0]["content"]["parts"][0]["text"]
+        return json.loads(re.sub(r"```json|```", "", text).strip())
+    except Exception as e:
+        print(f"⚠️ Gemini error: {e}")
+        return None
+
+# ── TELEGRAM ─────────────────────────────────────────────────────────
+def enviar_telegram(mensaje):
+    try:
+        requests.get(f"{TELEGRAM_URL}/sendMessage", params={
+            "chat_id": CHAT_ID, "text": mensaje,
+            "parse_mode": "HTML", "disable_web_page_preview": False
+        }, timeout=15).raise_for_status()
+        print(f"✅ Enviado: {mensaje[:60]}...")
+    except Exception as e:
+        print(f"❌ Telegram error: {e}")
+
+def formatear_mensaje(job, gemini=None):
+    msg = (
+        f"⛏️ <b>NUEVO EMPLEO MINERO</b>\n\n"
+        f"🏢 <b>{job['empresa']}</b>\n"
+        f"📋 <b>{job['title']}</b>\n"
+        f"📍 {job['faena']} — {job['ciudad']}\n"
+        f"📅 Publicado: {job['date']}  |  Cierra: {job['closing']}\n"
+    )
+    if gemini:
+        msg += f"{'✅' if gemini.get('relevante') else '⚠️'} IA: {gemini.get('razon','')}\n"
+    msg += f"🔗 <a href='{job['url']}'>Ver oferta</a>"
+    return msg
+
+# ── MAIN ──────────────────────────────────────────────────────────────
+def main():
+    print(f"\n🔍 [{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Iniciando Radar Minero...")
+
+    seen      = set(cargar_json(SEEN_FILE, []))
+    memoria   = cargar_json(MEMORIA_FILE, {
+        "rechazados": [], "aceptados": [],
+        "empresas_buenas": [], "empresas_malas": [],
+        "ciudades_malas": [], "turnos_buenos": ["7x7", "10x10", "14x14", "4x3"]
+    })
+    historial = cargar_json(HISTORIAL_FILE, [])
+
+    print("\n--- Anglo American ---")
+    todos_jobs = fetch_anglo_jobs()
+
+    print("\n--- Antofagasta Minerals ---")
+    todos_jobs += fetch_amsa_jobs()
+
+    print(f"\n📊 Total encontrados: {len(todos_jobs)}")
+    nuevos = [j for j in todos_jobs if j["id"] not in seen]
+    print(f"🆕 Nuevos: {len(nuevos)}")
+
+    enviados = 0
+    for job in nuevos:
+        gemini = analizar_con_gemini(job, memoria)
+        enviar_telegram(formatear_mensaje(job, gemini))
+        historial.append({
+            "id": job["id"], "title": job["title"],
+            "empresa": job["empresa"], "ciudad": job["ciudad"],
+            "date": job["date"], "enviado": datetime.now().strftime("%Y-%m-%d %H:%M"),
+            "ia_relevante": gemini.get("relevante") if gemini else None
+        })
+        seen.add(job["id"])
+        enviados += 1
+        time.sleep(1)
+
+    guardar_json(SEEN_FILE, list(seen))
+    guardar_json(HISTORIAL_FILE, historial[-500:])
+    print(f"\n✅ Sin empleos nuevos." if enviados == 0 else f"\n📬 {enviados} empleos enviados.")
+
+if __name__ == "__main__":
+    main()
