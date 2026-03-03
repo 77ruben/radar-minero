@@ -1,6 +1,6 @@
-- name: Instalar Librerías
+ name: Instalar Librerías
   run: |
     python -m pip install --upgrade pip
     pip install requests beautifulsoup4 google-generativeai playwright
     playwright install chromium
-    playwright install-deps chromium
+    sudo playwright install-deps chromium
