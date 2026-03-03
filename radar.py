@@ -62,45 +62,73 @@ def fetch_anglo_jobs():
         print(f"❌ Error Anglo American: {e}")
         return []
 
-# ── SCRAPER ANTOFAGASTA MINERALS (Playwright + DWR) ─────────────────
+# ── SCRAPER ANTOFAGASTA MINERALS (Selenium + DWR) ───────────────────
 def fetch_amsa_jobs():
     try:
-        from playwright.sync_api import sync_playwright
+        from selenium import webdriver
+        from selenium.webdriver.chrome.options import Options
+        from selenium.webdriver.chrome.service import Service
+        from selenium.webdriver.support.ui import WebDriverWait
+        from selenium.webdriver.support import expected_conditions as EC
+        from selenium.webdriver.common.by import By
 
         CAREER_URL    = "https://career8.successfactors.com/career?company=AMSAP&career_ns=job_listing_summary&navBarLevel=JOB_SEARCH"
         DETAIL_PREFIX = "https://career8.successfactors.com/career?career_ns=job_listing&company=AMSAP&navBarLevel=JOB_SEARCH&rcm_site_locale=es_ES&career_job_req_id="
 
+        options = Options()
+        options.add_argument("--headless")
+        options.add_argument("--no-sandbox")
+        options.add_argument("--disable-dev-shm-usage")
+        options.add_argument("--disable-gpu")
+        options.add_argument("--window-size=1920,1080")
+        options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36")
+
+        # Capturar logs de red para interceptar DWR
+        options.set_capability("goog:loggingPrefs", {"performance": "ALL"})
+
+        print("   🌐 Iniciando Chrome con Selenium...")
+        driver = webdriver.Chrome(options=options)
+
         dwr_response_text = None
 
-        def intercept_response(response):
-            nonlocal dwr_response_text
-            if "getInitialJobSearchData" in response.url:
+        try:
+            driver.get(CAREER_URL)
+            time.sleep(8)  # esperar que cargue el DWR
+
+            # Buscar en los logs de performance la respuesta DWR
+            logs = driver.get_log("performance")
+            for entry in logs:
                 try:
-                    dwr_response_text = response.text()
-                    print(f"   ✅ DWR interceptado: {len(dwr_response_text)} chars")
+                    msg = json.loads(entry["message"])["message"]
+                    if msg.get("method") == "Network.responseReceived":
+                        url = msg.get("params", {}).get("response", {}).get("url", "")
+                        if "getInitialJobSearchData" in url:
+                            req_id = msg["params"]["requestId"]
+                            try:
+                                body = driver.execute_cdp_cmd(
+                                    "Network.getResponseBody", {"requestId": req_id}
+                                )
+                                dwr_response_text = body.get("body", "")
+                                print(f"   ✅ DWR interceptado: {len(dwr_response_text)} chars")
+                                break
+                            except:
+                                pass
                 except:
                     pass
 
-        with sync_playwright() as p:
-            browser = p.chromium.launch(
-                headless=True,
-                args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"]
-            )
-            context = browser.new_context(
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36",
-                locale="es-ES",
-                timezone_id="America/Santiago"
-            )
-            page = context.new_page()
-            page.on("response", intercept_response)
+            # Si no capturamos vía logs, intentar leer el page source
+            if not dwr_response_text:
+                print("   ⚠️ DWR no interceptado por logs, intentando page source...")
+                page_source = driver.page_source
+                if "s0.postings" in page_source or "s27.title" in page_source:
+                    dwr_response_text = page_source
+                    print(f"   ✅ Data encontrada en page source")
 
-            print("   🌐 Cargando portal AMSA con Playwright...")
-            page.goto(CAREER_URL, wait_until="networkidle", timeout=60000)
-            page.wait_for_timeout(5000)
-            browser.close()
+        finally:
+            driver.quit()
 
         if not dwr_response_text:
-            print("❌ AMSA: No se interceptó respuesta DWR")
+            print("❌ AMSA: No se pudo obtener datos")
             return []
 
         # Parsear respuesta DWR
@@ -131,7 +159,7 @@ def fetch_amsa_jobs():
         return jobs
 
     except Exception as e:
-        print(f"❌ Error AMSA Playwright: {e}")
+        print(f"❌ Error AMSA Selenium: {e}")
         return []
 
 # ── GEMINI IA ────────────────────────────────────────────────────────
