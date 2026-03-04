@@ -4,6 +4,7 @@ import json
 import re
 import time
 from datetime import datetime
+from bs4 import BeautifulSoup
 
 TOKEN      = os.environ["TOKEN"]
 CHAT_ID    = os.environ["CHAT_ID"]
@@ -62,14 +63,15 @@ def fetch_anglo_jobs():
         print(f"❌ Error Anglo American: {e}")
         return []
 
-# ── SCRAPER ANTOFAGASTA MINERALS (Selenium + DWR) ───────────────────
+# ── SCRAPER ANTOFAGASTA MINERALS (Selenium + HTML) ───────────────────
 def fetch_amsa_jobs():
     try:
         from selenium import webdriver
         from selenium.webdriver.chrome.options import Options
 
         CAREER_URL    = "https://career8.successfactors.com/career?company=AMSAP&career_ns=job_listing_summary&navBarLevel=JOB_SEARCH"
-        DETAIL_PREFIX = "https://career8.successfactors.com/career?career_ns=job_listing&company=AMSAP&navBarLevel=JOB_SEARCH&rcm_site_locale=es_ES&career_job_req_id="
+        BASE_URL      = "https://career8.successfactors.com"
+        DETAIL_PREFIX = f"{BASE_URL}/career?career_ns=job_listing&company=AMSAP&navBarLevel=JOB_SEARCH&rcm_site_locale=es_ES&career_job_req_id="
 
         options = Options()
         options.add_argument("--headless")
@@ -78,83 +80,77 @@ def fetch_amsa_jobs():
         options.add_argument("--disable-gpu")
         options.add_argument("--window-size=1920,1080")
         options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36")
-        options.set_capability("goog:loggingPrefs", {"performance": "ALL"})
 
         print("   🌐 Iniciando Chrome con Selenium...")
         driver = webdriver.Chrome(options=options)
-
-        best_response = None
 
         try:
             driver.get(CAREER_URL)
             print("   ⏳ Esperando carga completa (15s)...")
             time.sleep(15)
-
-            logs = driver.get_log("performance")
-            print(f"   📊 Logs de performance: {len(logs)}")
-
-            # Capturar TODAS las respuestas DWR y quedarse con la más larga
-            dwr_responses = []
-            for entry in logs:
-                try:
-                    msg = json.loads(entry["message"])["message"]
-                    if msg.get("method") == "Network.responseReceived":
-                        url = msg.get("params", {}).get("response", {}).get("url", "")
-                        if "dwr" in url.lower() or "career" in url.lower():
-                            req_id = msg["params"]["requestId"]
-                            try:
-                                body = driver.execute_cdp_cmd(
-                                    "Network.getResponseBody", {"requestId": req_id}
-                                )
-                                text = body.get("body", "")
-                                if text and len(text) > 100:
-                                    dwr_responses.append((url, text))
-                            except:
-                                pass
-                except:
-                    pass
-
-            print(f"   📡 Respuestas capturadas: {len(dwr_responses)}")
-            for i, (url, text) in enumerate(dwr_responses):
-                titles_found = len(re.findall(r's\d+\.title\s*=', text))
-                print(f"   [{i}] {len(text)} chars | titles: {titles_found} | url: {url[-60:]}")
-                if titles_found > 0:
-                    best_response = text
-                    print(f"   ✅ Respuesta con empleos encontrada!")
-
+            html = driver.page_source
+            print(f"   📄 HTML obtenido: {len(html)} chars")
         finally:
             driver.quit()
 
-        if not best_response:
-            print("❌ AMSA: No se encontró respuesta con empleos")
-            return []
-
-        # Parsear respuesta DWR
-        titles = {m.group(1): m.group(2) for m in re.finditer(r'(s\d+)\.title\s*=\s*"([^"]+)"', best_response)}
-        ids    = {m.group(1): m.group(2) for m in re.finditer(r'(s\d+)\.id\s*=\s*(\d+)', best_response)}
-        dates  = {m.group(1): m.group(2) for m in re.finditer(r'(s\d+)\.postingDate\s*=\s*"([^"]+)"', best_response)}
-
-        print(f"   🔍 titles: {len(titles)} | ids: {len(ids)} | dates: {len(dates)}")
-
+        soup = BeautifulSoup(html, "html.parser")
         jobs = []
-        for var in set(titles.keys()) & set(ids.keys()):
-            title = titles[var]
-            try:
-                title = title.encode('raw_unicode_escape').decode('unicode_escape')
-            except:
-                pass
+
+        # Buscar links de empleos — patron tipico de SuccessFactors
+        # Los empleos suelen estar en elementos con career_job_req_id en la URL
+        links = soup.find_all("a", href=re.compile(r"career_job_req_id=\d+"))
+        print(f"   🔍 Links con career_job_req_id: {len(links)}")
+
+        seen_ids = set()
+        for link in links:
+            href = link.get("href", "")
+            m = re.search(r"career_job_req_id=(\d+)", href)
+            if not m:
+                continue
+            job_id = m.group(1)
+            if job_id in seen_ids:
+                continue
+            seen_ids.add(job_id)
+
+            title = link.get_text(strip=True)
+            if not title or len(title) < 3:
+                # buscar texto en elementos cercanos
+                parent = link.find_parent()
+                if parent:
+                    title = parent.get_text(strip=True)[:100]
+
+            url = href if href.startswith("http") else BASE_URL + href
+
             jobs.append({
-                "id": f"amsa_{ids[var]}",
+                "id": f"amsa_{job_id}",
                 "title": title,
-                "date": dates.get(var, "N/A").replace("\\/", "/"),
+                "date": "N/A",
                 "closing": "N/A",
                 "ciudad": "Chile",
                 "faena": "Antofagasta Minerals",
-                "url": DETAIL_PREFIX + ids[var],
+                "url": url,
                 "empresa": "Antofagasta Minerals",
             })
 
-        jobs.sort(key=lambda x: x["date"], reverse=True)
+        # Si no encontramos con ese patrón, buscar por clases típicas de SuccessFactors
+        if not jobs:
+            print("   🔍 Intentando búsqueda por clases CSS...")
+            # Buscar elementos con clase que contenga 'job' o 'posting'
+            for cls in ["jobTitle", "job-title", "posting-title", "rcm-job-title"]:
+                elements = soup.find_all(class_=re.compile(cls, re.IGNORECASE))
+                if elements:
+                    print(f"   Encontrados {len(elements)} elementos con clase '{cls}'")
+                    for el in elements[:5]:
+                        print(f"   → {el.get_text(strip=True)[:80]}")
+                    break
+
+            # Buscar cualquier texto que parezca título de trabajo minero
+            all_text = soup.get_text()
+            job_matches = re.findall(r'((?:Ingeniero|Técnico|Operador|Supervisor|Jefe|Gerente|Analista|Especialista)[^\n]{10,80})', all_text)
+            print(f"   🔍 Posibles títulos en texto: {len(job_matches)}")
+            for t in job_matches[:5]:
+                print(f"   → {t.strip()}")
+
         print(f"✅ Antofagasta Minerals: {len(jobs)} empleos encontrados")
         return jobs
 
