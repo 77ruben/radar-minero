@@ -67,10 +67,6 @@ def fetch_amsa_jobs():
     try:
         from selenium import webdriver
         from selenium.webdriver.chrome.options import Options
-        from selenium.webdriver.chrome.service import Service
-        from selenium.webdriver.support.ui import WebDriverWait
-        from selenium.webdriver.support import expected_conditions as EC
-        from selenium.webdriver.common.by import By
 
         CAREER_URL    = "https://career8.successfactors.com/career?company=AMSAP&career_ns=job_listing_summary&navBarLevel=JOB_SEARCH"
         DETAIL_PREFIX = "https://career8.successfactors.com/career?career_ns=job_listing&company=AMSAP&navBarLevel=JOB_SEARCH&rcm_site_locale=es_ES&career_job_req_id="
@@ -81,9 +77,9 @@ def fetch_amsa_jobs():
         options.add_argument("--disable-dev-shm-usage")
         options.add_argument("--disable-gpu")
         options.add_argument("--window-size=1920,1080")
+        options.add_argument("--enable-logging")
+        options.add_argument("--log-level=0")
         options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36")
-
-        # Capturar logs de red para interceptar DWR
         options.set_capability("goog:loggingPrefs", {"performance": "ALL"})
 
         print("   🌐 Iniciando Chrome con Selenium...")
@@ -93,10 +89,12 @@ def fetch_amsa_jobs():
 
         try:
             driver.get(CAREER_URL)
-            time.sleep(8)  # esperar que cargue el DWR
+            print("   ⏳ Esperando carga completa (15s)...")
+            time.sleep(15)
 
-            # Buscar en los logs de performance la respuesta DWR
             logs = driver.get_log("performance")
+            print(f"   📊 Logs de performance: {len(logs)}")
+
             for entry in logs:
                 try:
                     msg = json.loads(entry["message"])["message"]
@@ -110,31 +108,26 @@ def fetch_amsa_jobs():
                                 )
                                 dwr_response_text = body.get("body", "")
                                 print(f"   ✅ DWR interceptado: {len(dwr_response_text)} chars")
+                                print(f"   📄 Preview: {dwr_response_text[:300]}")
                                 break
-                            except:
-                                pass
+                            except Exception as ex:
+                                print(f"   ⚠️ Error obteniendo body: {ex}")
                 except:
                     pass
-
-            # Si no capturamos vía logs, intentar leer el page source
-            if not dwr_response_text:
-                print("   ⚠️ DWR no interceptado por logs, intentando page source...")
-                page_source = driver.page_source
-                if "s0.postings" in page_source or "s27.title" in page_source:
-                    dwr_response_text = page_source
-                    print(f"   ✅ Data encontrada en page source")
 
         finally:
             driver.quit()
 
         if not dwr_response_text:
-            print("❌ AMSA: No se pudo obtener datos")
+            print("❌ AMSA: No se pudo interceptar DWR")
             return []
 
         # Parsear respuesta DWR
         titles = {m.group(1): m.group(2) for m in re.finditer(r'(s\d+)\.title\s*=\s*"([^"]+)"', dwr_response_text)}
         ids    = {m.group(1): m.group(2) for m in re.finditer(r'(s\d+)\.id\s*=\s*(\d+)', dwr_response_text)}
         dates  = {m.group(1): m.group(2) for m in re.finditer(r'(s\d+)\.postingDate\s*=\s*"([^"]+)"', dwr_response_text)}
+
+        print(f"   🔍 titles: {len(titles)} | ids: {len(ids)} | dates: {len(dates)}")
 
         jobs = []
         for var in set(titles.keys()) & set(ids.keys()):
