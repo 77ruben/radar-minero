@@ -1,5 +1,5 @@
-- name: Instalar Librerías
-  run: |
-    python -m pip install --upgrade pip
-    pip install -r requirements.txt
-    pip install selenium
+ml- name: Debug AMSA
+  run: python debug_amsa3.py
+  env:
+    TOKEN: ${{ secrets.TOKEN }}
+    CHAT_ID: ${{ secrets.CHAT_ID }}
