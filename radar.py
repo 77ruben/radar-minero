@@ -77,15 +77,13 @@ def fetch_amsa_jobs():
         options.add_argument("--disable-dev-shm-usage")
         options.add_argument("--disable-gpu")
         options.add_argument("--window-size=1920,1080")
-        options.add_argument("--enable-logging")
-        options.add_argument("--log-level=0")
         options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36")
         options.set_capability("goog:loggingPrefs", {"performance": "ALL"})
 
         print("   🌐 Iniciando Chrome con Selenium...")
         driver = webdriver.Chrome(options=options)
 
-        dwr_response_text = None
+        best_response = None
 
         try:
             driver.get(CAREER_URL)
@@ -95,37 +93,46 @@ def fetch_amsa_jobs():
             logs = driver.get_log("performance")
             print(f"   📊 Logs de performance: {len(logs)}")
 
+            # Capturar TODAS las respuestas DWR y quedarse con la más larga
+            dwr_responses = []
             for entry in logs:
                 try:
                     msg = json.loads(entry["message"])["message"]
                     if msg.get("method") == "Network.responseReceived":
                         url = msg.get("params", {}).get("response", {}).get("url", "")
-                        if "getInitialJobSearchData" in url:
+                        if "dwr" in url.lower() or "career" in url.lower():
                             req_id = msg["params"]["requestId"]
                             try:
                                 body = driver.execute_cdp_cmd(
                                     "Network.getResponseBody", {"requestId": req_id}
                                 )
-                                dwr_response_text = body.get("body", "")
-                                print(f"   ✅ DWR interceptado: {len(dwr_response_text)} chars")
-                                print(f"   📄 Preview: {dwr_response_text[:300]}")
-                                break
-                            except Exception as ex:
-                                print(f"   ⚠️ Error obteniendo body: {ex}")
+                                text = body.get("body", "")
+                                if text and len(text) > 100:
+                                    dwr_responses.append((url, text))
+                            except:
+                                pass
                 except:
                     pass
+
+            print(f"   📡 Respuestas capturadas: {len(dwr_responses)}")
+            for i, (url, text) in enumerate(dwr_responses):
+                titles_found = len(re.findall(r's\d+\.title\s*=', text))
+                print(f"   [{i}] {len(text)} chars | titles: {titles_found} | url: {url[-60:]}")
+                if titles_found > 0:
+                    best_response = text
+                    print(f"   ✅ Respuesta con empleos encontrada!")
 
         finally:
             driver.quit()
 
-        if not dwr_response_text:
-            print("❌ AMSA: No se pudo interceptar DWR")
+        if not best_response:
+            print("❌ AMSA: No se encontró respuesta con empleos")
             return []
 
         # Parsear respuesta DWR
-        titles = {m.group(1): m.group(2) for m in re.finditer(r'(s\d+)\.title\s*=\s*"([^"]+)"', dwr_response_text)}
-        ids    = {m.group(1): m.group(2) for m in re.finditer(r'(s\d+)\.id\s*=\s*(\d+)', dwr_response_text)}
-        dates  = {m.group(1): m.group(2) for m in re.finditer(r'(s\d+)\.postingDate\s*=\s*"([^"]+)"', dwr_response_text)}
+        titles = {m.group(1): m.group(2) for m in re.finditer(r'(s\d+)\.title\s*=\s*"([^"]+)"', best_response)}
+        ids    = {m.group(1): m.group(2) for m in re.finditer(r'(s\d+)\.id\s*=\s*(\d+)', best_response)}
+        dates  = {m.group(1): m.group(2) for m in re.finditer(r'(s\d+)\.postingDate\s*=\s*"([^"]+)"', best_response)}
 
         print(f"   🔍 titles: {len(titles)} | ids: {len(ids)} | dates: {len(dates)}")
 
