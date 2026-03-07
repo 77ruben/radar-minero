@@ -1,5 +1,33 @@
-ml- name: Debug AMSA
-  run: python debug_amsa3.py
-  env:
-    TOKEN: ${{ secrets.TOKEN }}
-    CHAT_ID: ${{ secrets.CHAT_ID }}
+name: radar-minero
+
+on:
+  schedule:
+    - cron: "*/ 6 * * * *"
+  workflow_dispatch:
+
+jobs:
+
+  radar:
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Clonar repositorio
+        uses: actions/checkout@v3
+
+      - name: Instalar Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Instalar librerías
+        run: |
+          pip install requests
+          pip install beautifulsoup4
+
+      - name: Ejecutar Radar
+        run: python radar.py
+        env:
+          TOKEN: ${{ secrets.TOKEN }}
+          CHAT_ID: ${{ secrets.CHAT_ID }}
