@@ -1,30 +1,33 @@
-name: Radar Minero
+name: radar-minero
 
 on:
   schedule:
-    - cron: "0 */6 * * *"   # Cada 6 horas
-  workflow_dispatch:        # Permite ejecución manual
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
 
 jobs:
+
   radar:
+
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repositorio
+
+      - name: Clonar repo
         uses: actions/checkout@v3
 
-      - name: Configurar Python
+      - name: Python
         uses: actions/setup-python@v4
         with:
-          python-version: "3.10"
+          python-version: "3.11"
 
-      - name: Instalar dependencias
+      - name: Instalar librerías
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install requests
+          pip install beautifulsoup4
 
       - name: Ejecutar radar
+        run: python radar.py
         env:
           TOKEN: ${{ secrets.TOKEN }}
           CHAT_ID: ${{ secrets.CHAT_ID }}
-        run: python radar.py
