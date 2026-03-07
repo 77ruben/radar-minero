@@ -3,439 +3,236 @@ from bs4 import BeautifulSoup
 import os
 import json
 
-print("RADAR MINERO SUPERVISIÓN V1")
-
 TOKEN = os.environ["TOKEN"]
 CHAT_ID = os.environ["CHAT_ID"]
 
-HEADERS = {"User-Agent": "Mozilla/5.0"}
+HEADERS = {"User-Agent":"Mozilla/5.0"}
 
-HISTORIAL_FILE = "historial.json"
+HISTORIAL_FILE="historial.json"
 
-# ---------------------------------
-# FILTRO DE CARGOS (TU PERFIL)
-# ---------------------------------
-
-KEYWORDS = [
-
+KEYWORDS=[
 "supervisor",
 "supervisor de operaciones",
-
 "administrador",
 "administrador de contratos",
-"contract manager",
-
 "jefe",
 "jefe de operaciones",
-
 "subgerente",
 "sub gerente",
-
 "lider",
 "líder",
-
 "encargado",
-
 "superintendent",
-"superintendente",
-
-"coordinator",
-"coordinador",
-
 "manager",
-"site manager",
-
-"operations supervisor",
-"maintenance supervisor"
+"operations supervisor"
 ]
 
-EXCLUIR = [
+EXCLUIR=[
 "practica",
 "práctica",
 "trainee",
-"intern",
-"alumno"
+"intern"
 ]
 
-# ---------------------------------
+# -------------------------
 # HISTORIAL
-# ---------------------------------
+# -------------------------
 
 if os.path.exists(HISTORIAL_FILE):
     with open(HISTORIAL_FILE,"r") as f:
-        historial = json.load(f)
+        historial=json.load(f)
 else:
-    historial = []
+    historial=[]
 
-nuevos = []
+nuevos=[]
+reporte=[]
 
-# ---------------------------------
+# -------------------------
+# TELEGRAM
+# -------------------------
+
+def telegram(msg):
+
+    requests.post(
+        f"https://api.telegram.org/bot{TOKEN}/sendMessage",
+        data={"chat_id":CHAT_ID,"text":msg[:4000]}
+    )
+
+# -------------------------
 # FILTRO
-# ---------------------------------
+# -------------------------
 
-def cumple(texto):
+def cumple(titulo):
 
-    t = texto.lower()
+    t=titulo.lower()
 
     if any(x in t for x in EXCLUIR):
         return False
 
-    for palabra in KEYWORDS:
-        if palabra in t:
-            return True
+    return any(k in t for k in KEYWORDS)
 
-    return False
+# -------------------------
+# EJECUTOR SEGURO
+# -------------------------
 
+def ejecutar(nombre,func):
 
-# ---------------------------------
-# TELEGRAM
-# ---------------------------------
+    try:
 
-def enviar(msg):
+        encontrados=func()
 
-    requests.post(
-        f"https://api.telegram.org/bot{TOKEN}/sendMessage",
-        data={
-            "chat_id": CHAT_ID,
-            "text": msg[:4000]
-        }
-    )
+        if encontrados==0:
+            reporte.append(f"✔ {nombre}: sin empleos nuevos")
 
+        else:
+            reporte.append(f"✔ {nombre}: {encontrados} empleos")
 
-# ---------------------------------
+    except Exception as e:
+
+        reporte.append(f"❌ {nombre}: ERROR scraping")
+
+# -------------------------
 # CODELCO
-# ---------------------------------
+# -------------------------
 
 def codelco():
 
-    try:
+    count=0
 
-        url="https://empleos.codelco.cl/search/?q="
+    url="https://empleos.codelco.cl/search/?q="
 
-        r=requests.get(url,headers=HEADERS)
+    r=requests.get(url,headers=HEADERS,timeout=20)
 
-        soup=BeautifulSoup(r.text,"html.parser")
+    soup=BeautifulSoup(r.text,"html.parser")
 
-        for link in soup.find_all("a",href=True):
+    for link in soup.find_all("a",href=True):
 
-            titulo=link.get_text(strip=True)
+        if "/job/" not in link["href"]:
+            continue
 
-            if "/job/" not in link["href"]:
-                continue
+        titulo=link.text.strip()
 
-            if not cumple(titulo):
-                continue
+        if not cumple(titulo):
+            continue
 
-            job_link="https://empleos.codelco.cl"+link["href"]
+        job_link="https://empleos.codelco.cl"+link["href"]
 
-            if job_link in historial:
-                continue
+        if job_link in historial:
+            continue
 
-            nuevos.append(f"{titulo}\nCodelco\n{job_link}")
+        nuevos.append(f"{titulo}\n{job_link}")
 
-            historial.append(job_link)
+        historial.append(job_link)
 
-    except Exception as e:
+        count+=1
 
-        print("Error Codelco:",e)
+    return count
 
-
-# ---------------------------------
-# BHP
-# ---------------------------------
-
-def bhp():
-
-    try:
-
-        url="https://careers.bhp.com/search?location=chile"
-
-        r=requests.get(url,headers=HEADERS)
-
-        soup=BeautifulSoup(r.text,"html.parser")
-
-        for link in soup.find_all("a",href=True):
-
-            if "/job/" not in link["href"]:
-                continue
-
-            titulo=link.get_text(strip=True)
-
-            if not cumple(titulo):
-                continue
-
-            job_link="https://careers.bhp.com"+link["href"]
-
-            if job_link in historial:
-                continue
-
-            nuevos.append(f"{titulo}\nBHP\n{job_link}")
-
-            historial.append(job_link)
-
-    except Exception as e:
-
-        print("Error BHP:",e)
-
-
-# ---------------------------------
-# TECK (API)
-# ---------------------------------
-
-def teck():
-
-    try:
-
-        url="https://jobs.teck.com/services/recruiting/v1/jobs"
-
-        payload={"locale":"es_ES","pageNumber":0}
-
-        r=requests.post(url,json=payload)
-
-        data=r.json()
-
-        jobs=data.get("jobSearchResult",[])
-
-        for item in jobs:
-
-            job=item.get("response",{})
-
-            titulo=job.get("unifiedStandardTitle")
-
-            if not titulo:
-                continue
-
-            if not cumple(titulo):
-                continue
-
-            job_id=job.get("id")
-
-            url_title=job.get("urlTitle")
-
-            link=f"https://jobs.teck.com/job/{url_title}/{job_id}/es_ES"
-
-            if link in historial:
-                continue
-
-            nuevos.append(f"{titulo}\nTECK\n{link}")
-
-            historial.append(link)
-
-    except Exception as e:
-
-        print("Error Teck:",e)
-
-
-# ---------------------------------
+# -------------------------
 # KINROSS
-# ---------------------------------
+# -------------------------
 
 def kinross():
 
-    try:
+    count=0
 
-        url="https://jobs.kinross.com/search/?locationsearch=Chile"
+    url="https://jobs.kinross.com/search/?locationsearch=Chile"
 
-        r=requests.get(url,headers=HEADERS)
+    r=requests.get(url,headers=HEADERS,timeout=20)
 
-        soup=BeautifulSoup(r.text,"html.parser")
+    soup=BeautifulSoup(r.text,"html.parser")
 
-        jobs=soup.find_all("tr",class_="data-row")
+    jobs=soup.find_all("tr",class_="data-row")
 
-        for job in jobs:
+    for job in jobs:
 
-            titulo_tag=job.find("a")
+        tag=job.find("a")
 
-            if not titulo_tag:
-                continue
+        if not tag:
+            continue
 
-            titulo=titulo_tag.text.strip()
+        titulo=tag.text.strip()
 
-            if not cumple(titulo):
-                continue
+        if not cumple(titulo):
+            continue
 
-            link="https://jobs.kinross.com"+titulo_tag["href"]
+        link="https://jobs.kinross.com"+tag["href"]
 
-            if link in historial:
-                continue
+        if link in historial:
+            continue
 
-            nuevos.append(f"{titulo}\nKinross\n{link}")
+        nuevos.append(f"{titulo}\n{link}")
 
-            historial.append(link)
+        historial.append(link)
 
-    except Exception as e:
+        count+=1
 
-        print("Error Kinross:",e)
+    return count
 
-
-# ---------------------------------
-# LUNDIN
-# ---------------------------------
-
-def lundin():
-
-    try:
-
-        base="https://jobs.lundinmining.com"
-
-        url=base+"/tile-search-results/?q=&startrow=0"
-
-        r=requests.get(url,headers=HEADERS)
-
-        soup=BeautifulSoup(r.text,"html.parser")
-
-        jobs=soup.find_all("li",class_="job-tile")
-
-        for job in jobs:
-
-            texto=job.get_text(" ",strip=True)
-
-            if ", CL" not in texto:
-                continue
-
-            titulo_tag=job.find("a",class_="jobTitle-link")
-
-            if not titulo_tag:
-                continue
-
-            titulo=titulo_tag.text.strip()
-
-            if not cumple(titulo):
-                continue
-
-            link=base+titulo_tag["href"]
-
-            if link in historial:
-                continue
-
-            nuevos.append(f"{titulo}\nLundin\n{link}")
-
-            historial.append(link)
-
-    except Exception as e:
-
-        print("Error Lundin:",e)
-
-
-# ---------------------------------
-# FREEPORT
-# ---------------------------------
-
-def freeport():
-
-    try:
-
-        base="https://jobs.fcx.com"
-
-        url="https://jobs.fcx.com/South-America/go/Oportunidades-Laborales-en-Chile/8009100/"
-
-        r=requests.get(url,headers=HEADERS)
-
-        soup=BeautifulSoup(r.text,"html.parser")
-
-        for job in soup.find_all("a",class_="jobTitle-link"):
-
-            titulo=job.get_text(strip=True)
-
-            if not cumple(titulo):
-                continue
-
-            link=base+job["href"]
-
-            if link in historial:
-                continue
-
-            nuevos.append(f"{titulo}\nFreeport\n{link}")
-
-            historial.append(link)
-
-    except Exception as e:
-
-        print("Error Freeport:",e)
-
-
-# ---------------------------------
-# ANGLO AMERICAN (API)
-# ---------------------------------
+# -------------------------
+# ANGLO AMERICAN
+# -------------------------
 
 def anglo():
 
-    try:
+    count=0
 
-        url="https://www.angloamerican.com/site-services/search-and-apply-data-fetch"
+    url="https://www.angloamerican.com/site-services/search-and-apply-data-fetch"
 
-        params={
-        "aadata":"get-search-jobs",
-        "languageCode":"en-GB",
-        "country":"chile"
-        }
+    params={
+    "aadata":"get-search-jobs",
+    "languageCode":"en-GB",
+    "country":"chile"
+    }
 
-        headers={
-        "User-Agent":"Mozilla/5.0",
-        "Accept":"application/json"
-        }
+    r=requests.get(url,params=params,headers=HEADERS,timeout=20)
 
-        r=requests.get(url,params=params,headers=headers)
+    data=r.json()
 
-        data=r.json()
+    for item in data.get("jobs",[]):
 
-        for item in data.get("jobs",[]):
+        titulo=item.get("jobTitle","")
 
-            titulo=item.get("jobTitle","")
+        if not cumple(titulo):
+            continue
 
-            if not cumple(titulo):
-                continue
+        link=item.get("applyUrl")
 
-            link=item.get("applyUrl")
+        if not link:
+            continue
 
-            if not link:
-                continue
+        if link in historial:
+            continue
 
-            if link in historial:
-                continue
+        nuevos.append(f"{titulo}\n{link}")
 
-            nuevos.append(f"{titulo}\nAnglo American\n{link}")
+        historial.append(link)
 
-            historial.append(link)
+        count+=1
 
-    except Exception as e:
+    return count
 
-        print("Error Anglo:",e)
-
-
-# ---------------------------------
+# -------------------------
 # EJECUCIÓN
-# ---------------------------------
+# -------------------------
 
-codelco()
-bhp()
-teck()
-kinross()
-lundin()
-freeport()
-anglo()
+ejecutar("Codelco",codelco)
+ejecutar("Kinross",kinross)
+ejecutar("Anglo American",anglo)
 
-# ---------------------------------
+# -------------------------
 # GUARDAR HISTORIAL
-# ---------------------------------
+# -------------------------
 
 with open(HISTORIAL_FILE,"w") as f:
     json.dump(historial,f)
 
-# ---------------------------------
-# MENSAJE
-# ---------------------------------
+# -------------------------
+# MENSAJES TELEGRAM
+# -------------------------
 
 if nuevos:
 
-    mensaje="🚨 EMPLEOS MINEROS SUPERVISIÓN 🚨\n\n"
+    telegram("🚨 EMPLEOS DETECTADOS 🚨\n\n"+"\n\n".join(nuevos[:20]))
 
-    mensaje+="\n\n".join(nuevos[:25])
-
-else:
-
-    mensaje="Radar minero activo.\nSin nuevos empleos de supervisión."
-
-enviar(mensaje)
-
-print("RADAR TERMINADO")
+telegram("📡 REPORTE RADAR\n\n"+"\n".join(reporte))
