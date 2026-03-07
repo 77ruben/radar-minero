@@ -2,7 +2,7 @@ name: radar-minero
 
 on:
   schedule:
-    - cron: "*/ 6 * * * *"
+    - cron: "*/30 * * * *"
   workflow_dispatch:
 
 jobs:
@@ -13,10 +13,10 @@ jobs:
 
     steps:
 
-      - name: Clonar repositorio
+      - name: Clonar repo
         uses: actions/checkout@v3
 
-      - name: Instalar Python
+      - name: Python
         uses: actions/setup-python@v4
         with:
           python-version: "3.11"
@@ -26,7 +26,7 @@ jobs:
           pip install requests
           pip install beautifulsoup4
 
-      - name: Ejecutar Radar
+      - name: Ejecutar radar
         run: python radar.py
         env:
           TOKEN: ${{ secrets.TOKEN }}
